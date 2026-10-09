@@ -17,7 +17,12 @@
      &ttsvol=1       TTS volume 0-1
      &ttsvoice=name  pick a voice (part of its name, e.g. "zira")
      &drop=35        % chance a message earns 1 cookie
-     &block=a,b      extra words blocked from TTS                      */
+     &block=a,b      extra words blocked from TTS
+     &sfxvol=0.8     TTS sound-effect volume 0-1
+     &sfx=bruh,oof   extra (sfx) names; each plays <name>.mp3 from this folder
+     &alerts=0       turn alerts off        &alertsec=6  seconds per alert
+     &token=...&clientid=...   enables FOLLOW alerts (see notes)
+     &demo=1         show test buttons                                  */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
   #chat {
@@ -49,7 +54,45 @@
   .cheer .who { font-weight: 700; }
   .cheer .amt { font-weight: 800; color: #aee6ff; }
 
-  /* Small notices (cookie balance etc.) */
+  /* Cookie cards */
+  .msg.cookie {
+    margin: 5px 0; padding: 9px 14px; max-width: 360px;
+    background: rgba(24,17,12,.84); border: 1px solid rgba(255,196,107,.4); border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35); text-shadow: none;
+    animation: cheerIn .4s cubic-bezier(.2,.9,.3,1.2) both;
+  }
+  .cookie .chead { font-weight: 700; }
+  .cookie .cbig { font-size: 1.6em; font-weight: 800; color: #ffd18a; line-height: 1.15; margin-top: 2px; }
+  .cookie .cbar { height: 7px; border-radius: 4px; background: rgba(255,255,255,.14); margin-top: 7px; overflow: hidden; }
+  .cookie .cbar > div { height: 100%; background: linear-gradient(90deg,#ffb347,#ffd98a); border-radius: 4px; }
+  .cookie .chint { font-size: .72em; opacity: .75; margin-top: 4px; }
+
+  /* Alerts */
+  #alerts {
+    position: absolute; top: 14px; left: 0; right: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; pointer-events: none;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: var(--size, 20px); color: #fff;
+  }
+  .alert {
+    --ac: #7fd8ff;
+    display: flex; align-items: center; gap: 14px; max-width: 92%; box-sizing: border-box;
+    padding: 14px 24px; border-radius: 16px;
+    background: rgba(14,14,20,.88); border: 1px solid var(--ac);
+    box-shadow: 0 8px 24px rgba(0,0,0,.5), 0 0 14px var(--ac);
+    animation: alertIn .55s cubic-bezier(.2,.9,.3,1.25) both;
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  .alert.out { opacity: 0; transform: translateY(-14px) scale(.97); }
+  .alert .ai { font-size: 2em; filter: drop-shadow(0 0 8px var(--ac)); }
+  .alert .at { font-size: 1.3em; font-weight: 800; overflow-wrap: anywhere; }
+  .alert .as { font-size: .85em; opacity: .8; margin-top: 2px; overflow-wrap: anywhere; }
+  @keyframes alertIn { from { opacity: 0; transform: translateY(-24px) scale(.9); } to { opacity: 1; transform: none; } }
+
+  #demo { position: fixed; right: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 280px; z-index: 20; }
+  #demo button { font: 12px system-ui, sans-serif; padding: 4px 8px; cursor: pointer; }
+
+  /* Small notices */
   .msg.note { font-size: .85em; opacity: .9; }
 
   /* TTS line */
@@ -74,6 +117,7 @@
 </head>
 <body>
 <div id="chat"></div>
+<div id="alerts"></div>
 <div id="status"></div>
 
 <script>
@@ -90,6 +134,12 @@
   const DROP = (params.has("drop") ? Math.min(100, Math.max(0, parseFloat(params.get("drop")) || 0)) : 35) / 100;
   const EXTRA_BLOCK = (params.get("block") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean);
   const TTS_COST = 10, TTS_MAX_CHARS = 150, TTS_QUEUE_MAX = 5, TTS_USER_CD = 10000;
+  const ALERTS_ON = params.get("alerts") !== "0";
+  const ALERT_SEC = Math.max(2, parseFloat(params.get("alertsec")) || 6);
+  const SFX_VOL = params.has("sfxvol") ? Math.min(1, Math.max(0, parseFloat(params.get("sfxvol")) || 0)) : 0.8;
+  const EXTRA_SFX = (params.get("sfx") || "").toLowerCase().split(",").map(s => s.trim().replace(/[^a-z0-9_-]/g, "")).filter(Boolean);
+  const TOKEN = params.get("token") || "", CLIENT_ID = params.get("clientid") || "";
+  const DEMO = params.get("demo") === "1";
   if (params.get("size")) document.getElementById("chat").style.setProperty("--size", params.get("size") + "px");
   if (params.get("bg"))   document.body.classList.add("bg");
 
@@ -207,26 +257,53 @@
   // mods and the broadcaster have infinite cookies
   const isMod = (tags) => tags.mod === "1" || /(^|,)(moderator|broadcaster)\//.test(tags.badges || "");
 
-  /* ---------- Small on-screen notes ---------- */
+  /* ---------- Cookie cards ---------- */
   const noteLast = new Map();
-  function addNote(tags, user, rest) {
+  function addCookieCard(tags, user, short) {
     const now = Date.now();
-    if (now - (noteLast.get(user) || 0) < 5000) return;     // don't let one person flood notes
+    if (now - (noteLast.get(user) || 0) < 5000) return;     // don't let one person flood cards
     noteLast.set(user, now);
     const name = tags["display-name"] || user;
+    const mod = isMod(tags);
+    const have = bal(user);
+
     const el = document.createElement("div");
-    el.className = "msg note";
+    el.className = "msg cookie";
     const who = document.createElement("span");
-    who.className = "who"; who.style.fontWeight = "700";
     who.textContent = name;
     who.style.color = readable(tags.color, name);
-    el.append(who, document.createTextNode(rest));
-    push(el, {}, 7);
+    const head = document.createElement("div");
+    head.className = "chead";
+    if (short) head.append(who, document.createTextNode(` has ${have}, needs ${TTS_COST} cookies for TTS! 🍪`));
+    else head.append(document.createTextNode("🍪 "), who);
+    el.append(head);
+
+    if (!short) {
+      const big = document.createElement("div");
+      big.className = "cbig";
+      big.textContent = mod ? "∞ cookies" : `${have} ${have === 1 ? "cookie" : "cookies"}`;
+      el.append(big);
+    }
+    if (!mod) {
+      const bar = document.createElement("div"), fill = document.createElement("div");
+      bar.className = "cbar";
+      fill.style.width = Math.min(100, (have / TTS_COST) * 100) + "%";
+      bar.append(fill); el.append(bar);
+      if (!short) {
+        const hint = document.createElement("div");
+        hint.className = "chint";
+        hint.textContent = have >= TTS_COST ? "Enough for TTS, use !tts" : `${TTS_COST - have} more for TTS`;
+        el.append(hint);
+      }
+    } else if (!short) {
+      const hint = document.createElement("div");
+      hint.className = "chint"; hint.textContent = "Mods have unlimited cookies";
+      el.append(hint);
+    }
+    push(el, {}, 8);
   }
 
-  function showBalance(tags, user) {
-    addNote(tags, user, isMod(tags) ? " has ∞ 🍪" : ` has ${bal(user)} 🍪`);
-  }
+  function showBalance(tags, user) { addCookieCard(tags, user, false); }
 
   /* ---------- Cheer helper ---------- */
   const cheerLast = new Map();
@@ -238,6 +315,248 @@
     addCheer(tags, user, amount);
   }
   const CMD_CHEER = /^!cheer\s+(\d{1,3}(?:,\d{3})+|\d{1,9})\s*$/i;
+
+  /* ---------- Alerts ---------- */
+  const alertsEl = document.getElementById("alerts");
+  const alertQueue = [];
+  let alertBusy = false;
+  const ALERT_STYLE = { follow: ["💜", "#c79bff"], raid: ["⚔️", "#ff8a8a"], sub: ["⭐", "#ffd36b"], gift: ["🎁", "#7fe0b0"], bits: ["💎", "#7fd8ff"] };
+  const ALERT_NOTES = {
+    follow: [783.99, 1046.5, 1318.5],
+    sub:    [659.25, 830.61, 987.77, 1318.51],
+    raid:   [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568],
+    gift:   [880, 1108.7, 1318.5, 1760],
+    bits:   [987.77, 1318.51, 1975.5]
+  };
+
+  function chime(notes, step = 0.09, vol = 0.2) {
+    if (MUTE) return;
+    const c = audio(); if (!c || c.state !== "running") return;
+    const t0 = c.currentTime + 0.02;
+    const master = c.createGain(); master.gain.value = vol;
+    const delay = c.createDelay(); delay.delayTime.value = 0.22;
+    const fb = c.createGain(); fb.gain.value = 0.35;
+    const wet = c.createGain(); wet.gain.value = 0.4;
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
+    master.connect(lp); lp.connect(c.destination);
+    lp.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(c.destination);
+    notes.forEach((f, i) => {
+      const t = t0 + i * step;
+      [[f, 1], [f * 2, 0.25]].forEach(([freq, v]) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = "sine"; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(v, t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        o.connect(g); g.connect(master);
+        o.start(t); o.stop(t + 0.95);
+      });
+    });
+  }
+
+  function queueAlert(kind, title, sub) {
+    if (!ALERTS_ON || alertQueue.length > 8) return;
+    alertQueue.push({ kind, title, sub: sub || "" });
+    nextAlert();
+  }
+
+  function nextAlert() {
+    if (alertBusy || !alertQueue.length) return;
+    alertBusy = true;
+    const a = alertQueue.shift();
+    const [icon, color] = ALERT_STYLE[a.kind] || ALERT_STYLE.sub;
+    const el = document.createElement("div");
+    el.className = "alert";
+    el.style.setProperty("--ac", color);
+    const ic = document.createElement("div"); ic.className = "ai"; ic.textContent = icon;
+    const body = document.createElement("div");
+    const at = document.createElement("div"); at.className = "at"; at.textContent = a.title;
+    body.append(at);
+    if (a.sub) { const as = document.createElement("div"); as.className = "as"; as.textContent = a.sub; body.append(as); }
+    el.append(ic, body);
+    alertsEl.appendChild(el);
+    chime(ALERT_NOTES[a.kind] || ALERT_NOTES.sub);
+    setTimeout(() => {
+      el.classList.add("out");
+      setTimeout(() => { el.remove(); alertBusy = false; nextAlert(); }, 600);
+    }, ALERT_SEC * 1000);
+  }
+
+  // subs, resubs, gifts and raids arrive as USERNOTICE lines
+  const giftSeen = new Map();
+  function handleUserNotice(tags, text) {
+    const id = tags["msg-id"];
+    const login = tags.login || "";
+    const name = tags["display-name"] || login || "Someone";
+    const plan = (p) => ({ Prime: "Prime", "1000": "Tier 1", "2000": "Tier 2", "3000": "Tier 3" })[p] || "Tier 1";
+    const msg = text ? " · " + text.slice(0, 100) : "";
+    if (id === "raid") {
+      const n = parseInt(tags["msg-param-viewerCount"] || "0", 10) || 0;
+      queueAlert("raid", `${tags["msg-param-displayName"] || name} is raiding with ${n.toLocaleString("en-US")} ${n === 1 ? "viewer" : "viewers"}!`);
+    } else if (id === "sub") {
+      queueAlert("sub", `${name} just subscribed!`, plan(tags["msg-param-sub-plan"]) + msg);
+    } else if (id === "resub") {
+      const m = parseInt(tags["msg-param-cumulative-months"] || "0", 10) || 0;
+      queueAlert("sub", `${name} resubscribed${m > 1 ? " for " + m + " months" : ""}!`, plan(tags["msg-param-sub-plan"]) + msg);
+    } else if (id === "submysterygift") {
+      const n = parseInt(tags["msg-param-mass-gift-count"] || "1", 10) || 1;
+      giftSeen.set(login, Date.now());
+      queueAlert("gift", `${name} is gifting ${n} ${n === 1 ? "sub" : "subs"}!`, plan(tags["msg-param-sub-plan"]));
+    } else if (id === "subgift") {
+      if (Date.now() - (giftSeen.get(login) || 0) < 15000) return;   // part of a mass gift, already announced
+      queueAlert("gift", `${name} gifted a sub to ${tags["msg-param-recipient-display-name"] || "someone"}!`, plan(tags["msg-param-sub-plan"]));
+    }
+  }
+
+  /* Follow alerts: Twitch doesn't send follows through chat, so this uses EventSub.
+     It only runs if &token=...&clientid=... are in the URL. */
+  function startFollows() {
+    if (!TOKEN || !CLIENT_ID || !ALERTS_ON) return;
+    const H = { "Authorization": "Bearer " + TOKEN, "Client-Id": CLIENT_ID };
+    let ids = null, current = null, retry = 0;
+    async function getIds() {
+      if (ids) return ids;
+      const [a, b] = await Promise.all([
+        fetch("https://api.twitch.tv/helix/users?login=" + encodeURIComponent(CHANNEL), { headers: H }).then(r => r.json()),
+        fetch("https://api.twitch.tv/helix/users", { headers: H }).then(r => r.json())
+      ]);
+      ids = { broadcaster: a.data[0].id, mod: b.data[0].id };
+      return ids;
+    }
+    function open(url, isReconnect) {
+      const ws = new WebSocket(url || "wss://eventsub.wss.twitch.tv/ws");
+      current = ws;
+      ws.onmessage = async (ev) => {
+        let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        const type = msg.metadata && msg.metadata.message_type;
+        if (type === "session_welcome") {
+          retry = 0;
+          if (isReconnect) return;                           // subscriptions carry over on a reconnect
+          try {
+            const i = await getIds();
+            const r = await fetch("https://api.twitch.tv/helix/eventsub/subscriptions", {
+              method: "POST",
+              headers: { ...H, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "channel.follow", version: "2",
+                condition: { broadcaster_user_id: i.broadcaster, moderator_user_id: i.mod },
+                transport: { method: "websocket", session_id: msg.payload.session.id }
+              })
+            });
+            if (!r.ok) console.warn("follow alerts: subscribe failed", r.status, await r.text());
+          } catch (e) { console.warn("follow alerts failed", e); }
+        } else if (type === "session_reconnect") {
+          open(msg.payload.session.reconnect_url, true);
+        } else if (type === "notification" && msg.metadata.subscription_type === "channel.follow") {
+          queueAlert("follow", `${msg.payload.event.user_name} just followed!`);
+        }
+      };
+      ws.onclose = () => {
+        if (ws !== current) return;
+        setTimeout(() => open(), Math.min(1000 * 2 ** retry++, 30000));
+      };
+      ws.onerror = () => ws.close();
+    }
+    open();
+  }
+
+  /* ---------- SFX (used inside TTS) ---------- */
+  const SFX_NAMES = new Set(["meow", "gunshot", "vineboom", "airhorns", ...EXTRA_SFX]);
+  const SFX_MAX = 3;
+
+  function noiseBuf(c, secs) {
+    const b = c.createBuffer(1, Math.ceil(c.sampleRate * secs), c.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  }
+  function env(g, t0, a, hold, rel, peak) {
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + a);
+    g.gain.setValueAtTime(peak, t0 + a + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + hold + rel);
+  }
+
+  // Built-in sounds, used when there is no <name>.mp3 next to this file
+  const SYNTH = {
+    meow(c, out, t) {
+      const o = c.createOscillator(); o.type = "sawtooth";
+      o.frequency.setValueAtTime(420, t);
+      o.frequency.linearRampToValueAtTime(760, t + 0.14);
+      o.frequency.linearRampToValueAtTime(500, t + 0.6);
+      const f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 5;
+      f.frequency.setValueAtTime(800, t);
+      f.frequency.linearRampToValueAtTime(2000, t + 0.16);
+      f.frequency.linearRampToValueAtTime(900, t + 0.62);
+      const g = c.createGain(); env(g, t, 0.05, 0.35, 0.25, 0.9);
+      o.connect(f); f.connect(g); g.connect(out);
+      o.start(t); o.stop(t + 0.75);
+      return 0.75;
+    },
+    gunshot(c, out, t) {
+      const n = c.createBufferSource(); n.buffer = noiseBuf(c, 0.6);
+      const f = c.createBiquadFilter(); f.type = "lowpass";
+      f.frequency.setValueAtTime(7000, t);
+      f.frequency.exponentialRampToValueAtTime(250, t + 0.4);
+      const g = c.createGain();
+      g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      n.connect(f); f.connect(g); g.connect(out); n.start(t);
+      const o = c.createOscillator(); o.type = "sine";
+      o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+      const g2 = c.createGain();
+      g2.gain.setValueAtTime(1, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+      o.connect(g2); g2.connect(out); o.start(t); o.stop(t + 0.3);
+      return 0.6;
+    },
+    vineboom(c, out, t) {
+      const o = c.createOscillator(); o.type = "sine";
+      o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.9);
+      const sh = c.createWaveShaper(); const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) curve[i] = Math.tanh((i / 128 - 1) * 3);
+      sh.curve = curve;
+      const g = c.createGain();
+      g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+      o.connect(sh); sh.connect(g); g.connect(out); o.start(t); o.stop(t + 1.5);
+      return 1.4;
+    },
+    airhorns(c, out, t) {
+      [0, 0.75].forEach(off => {
+        [440, 554.37, 659.25].forEach((fr, i) => {
+          const o = c.createOscillator(); o.type = "sawtooth";
+          o.frequency.value = fr * (1 + (i - 1) * 0.004);
+          const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2600;
+          const g = c.createGain(); env(g, t + off, 0.03, 0.5, 0.15, 0.35);
+          o.connect(f); f.connect(g); g.connect(out);
+          o.start(t + off); o.stop(t + off + 0.8);
+        });
+      });
+      return 1.6;
+    }
+  };
+
+  // plays <name>.mp3 from this folder; if it's missing, uses the built-in sound (if there is one)
+  function playSfx(name) {
+    return new Promise(resolve => {
+      let finished = false, started = false, fell = false;
+      const done = () => { if (!finished) { finished = true; resolve(); } };
+      if (SFX_VOL === 0) return done();
+      const synth = () => {
+        const fn = SYNTH[name], c = audio();
+        if (!fn || !c || c.state !== "running") return done();
+        const out = c.createGain(); out.gain.value = 0.6 * SFX_VOL; out.connect(c.destination);
+        const dur = fn(c, out, c.currentTime + 0.02);
+        setTimeout(done, dur * 1000 + 100);
+      };
+      const fallback = () => { if (fell) return; fell = true; started ? done() : synth(); };
+      let a;
+      try { a = new Audio(name + ".mp3"); } catch (e) { return synth(); }
+      a.volume = SFX_VOL;
+      a.onended = done;
+      a.onerror = fallback;
+      a.play().then(() => { started = true; }).catch(fallback);
+      setTimeout(() => { try { a.pause(); } catch (e) {} done(); }, 5000);   // never longer than 5s
+    });
+  }
 
   /* ---------- TTS ---------- */
   const BLOCK = ["nigg", "fagg", "retard", "killyourself", ...EXTRA_BLOCK];
@@ -269,35 +588,71 @@
             .slice(0, TTS_MAX_CHARS);
   }
 
-  const ttsQueue = [], ttsLastUser = new Map();
-  let ttsBusy = false, ttsUtter = null;
+  // "hello (meow) there" -> [say hello, sfx meow, say there]
+  function parseSegments(text) {
+    const segs = [];
+    let last = 0, count = 0, m;
+    const re = /\(([a-z0-9_-]+)\)/gi;
+    while ((m = re.exec(text))) {
+      const name = m[1].toLowerCase();
+      if (!SFX_NAMES.has(name)) continue;
+      if (m.index > last) segs.push({ say: text.slice(last, m.index) });
+      if (count++ < SFX_MAX) segs.push({ sfx: name });
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) segs.push({ say: text.slice(last) });
+    return segs.map(s => s.sfx ? s : { say: s.say.trim() }).filter(s => s.sfx || s.say);
+  }
 
-  // browsers need one click before speech works; OBS browser sources don't
+  // always use an English voice, even if the system default is Russian etc.
+  function pickVoice(synth) {
+    const vs = synth.getVoices();
+    const en = vs.filter(v => /^en([-_]|$)/i.test(v.lang));
+    if (TTS_VOICE) {
+      const m = en.find(v => v.name.toLowerCase().includes(TTS_VOICE)) || vs.find(v => v.name.toLowerCase().includes(TTS_VOICE));
+      if (m) return m;
+    }
+    const us = en.filter(v => /^en[-_]US$/i.test(v.lang));
+    return us.find(v => /(natural|online|aria|jenny|zira|david|google)/i.test(v.name)) || us[0] || en[0] || null;
+  }
+  try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (e) {}
+
+  let ttsUtter = null, ttsBusy = false;
+  const ttsQueue = [], ttsLastUser = new Map();
+
+  function speakText(text) {
+    return new Promise(resolve => {
+      const synth = window.speechSynthesis;
+      if (!synth) return resolve();
+      const u = new SpeechSynthesisUtterance(text);
+      u.volume = TTS_VOL; u.lang = "en-US";
+      const v = pickVoice(synth);
+      if (v) { u.voice = v; u.lang = v.lang; }
+      let done = false, guard = null;
+      const finish = () => { if (done) return; done = true; clearTimeout(guard); resolve(); };
+      guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} finish(); }, 20000);
+      u.onend = finish; u.onerror = finish;
+      ttsUtter = u;                                         // keep a reference so it isn't garbage-collected mid-speech
+      synth.speak(u);
+    });
+  }
+
+  // browsers need one click before speech/sound works; OBS browser sources don't
   addEventListener("pointerdown", () => {
     try { speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch (e) {}
   }, { once: true });
 
-  function runTts() {
+  async function runTts() {
     if (ttsBusy || !ttsQueue.length) return;
-    const synth = window.speechSynthesis;
-    if (!synth) { ttsQueue.length = 0; return; }
     ttsBusy = true;
-    const u = new SpeechSynthesisUtterance(ttsQueue.shift());
-    u.volume = TTS_VOL;
-    if (TTS_VOICE) {
-      const v = synth.getVoices().find(v => v.name.toLowerCase().includes(TTS_VOICE));
-      if (v) u.voice = v;
-    }
-    let done = false, guard = null;
-    const finish = () => {
-      if (done) return;
-      done = true; clearTimeout(guard); ttsBusy = false;
-      setTimeout(runTts, 700);
-    };
-    guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} finish(); }, 20000);
-    u.onend = finish; u.onerror = finish;
-    ttsUtter = u;                                           // keep a reference so it isn't garbage-collected mid-speech
-    synth.speak(u);
+    const segs = ttsQueue.shift();
+    try {
+      for (const s of segs) {
+        if (s.sfx) await playSfx(s.sfx); else await speakText(s.say);
+      }
+    } catch (e) {}
+    ttsBusy = false;
+    setTimeout(runTts, 700);
   }
 
   function handleTts(tags, user, message) {
@@ -305,14 +660,18 @@
     const text = cleanTts(stripEmotes(message, tags.emotes).replace(/^!tts\s*/i, ""));
     if (!text) return;
 
+    // English only: ignore messages written mostly in other scripts (not charged)
+    const letters = text.match(/\p{L}/gu) || [];
+    const latin = text.match(/\p{Script=Latin}/gu) || [];
+    if (letters.length && latin.length / letters.length < 0.7) return;
+
     const mod = isMod(tags);
     const have = bal(user);
-    if (!mod && have < TTS_COST) {
-      addNote(tags, user, ` has ${have}, needs ${TTS_COST} cookies for TTS! 🍪`);
-      return;
-    }
+    if (!mod && have < TTS_COST) { addCookieCard(tags, user, true); return; }
     if (ttsBlocked(text)) return;                           // blocked text is never charged
     if (ttsQueue.length >= TTS_QUEUE_MAX) return;           // queue full, not charged
+    const segs = parseSegments(text);
+    if (!segs.length) return;
     const now = Date.now();
     if (!mod) {
       if (now - (ttsLastUser.get(user) || 0) < TTS_USER_CD) return;
@@ -330,8 +689,35 @@
     el.append(spk, n, t);
     push(el, tags);
 
-    ttsQueue.push(text);
+    ttsQueue.push(segs);
     runTts();
+  }
+
+  /* ---------- Demo buttons (?demo=1) ---------- */
+  if (DEMO) {
+    const box = document.createElement("div");
+    box.id = "demo";
+    const modTags = { mod: "1", badges: "broadcaster/1", "display-name": "Demo" };
+    const items = {
+      "Follow":   () => queueAlert("follow", "SampleViewer just followed!"),
+      "Raid":     () => queueAlert("raid", "SampleViewer is raiding with 42 viewers!"),
+      "Sub":      () => queueAlert("sub", "SampleViewer just subscribed!", "Tier 1 · hello!"),
+      "Resub":    () => queueAlert("sub", "SampleViewer resubscribed for 6 months!", "Tier 1"),
+      "Gift":     () => queueAlert("gift", "SampleViewer gifted a sub to Friend!", "Tier 1"),
+      "Mass gift":() => queueAlert("gift", "SampleViewer is gifting 5 subs!", "Tier 1"),
+      "Bits":     () => queueAlert("bits", "SampleViewer cheered 100 bits!"),
+      "Triangles":() => addCheer({ "display-name": "SampleViewer" }, "sampleviewer", 50),
+      "TTS+sfx":  () => handleTts(modTags, "demo", "!tts Hello there (meow) this is a test (vineboom) (gunshot) (airhorns)"),
+      "Cookies":  () => { noteLast.clear(); addCookieCard({ "display-name": "SampleViewer" }, "sampleviewer", false); },
+      "Short":    () => { noteLast.clear(); addCookieCard({ "display-name": "SampleViewer" }, "sampleviewer", true); }
+    };
+    Object.entries(items).forEach(([k, f]) => {
+      const b = document.createElement("button");
+      b.textContent = k;
+      b.onclick = () => { audio(); f(); };
+      box.append(b);
+    });
+    document.body.append(box);
   }
 
   /* ---------- Rendering ---------- */
@@ -346,9 +732,12 @@
     return `rgb(${r | 0},${g | 0},${b | 0})`;
   }
 
+  function unesc(v) {
+    return v.replace(/\\(.)/g, (m, c) => ({ s: " ", ":": ";", "\\": "\\", r: "\r", n: "\n" }[c] ?? c));
+  }
   function parseTags(raw) {
     const out = {};
-    raw.split(";").forEach(p => { const i = p.indexOf("="); out[p.slice(0, i)] = p.slice(i + 1); });
+    raw.split(";").forEach(p => { const i = p.indexOf("="); out[p.slice(0, i)] = unesc(p.slice(i + 1)); });
     return out;
   }
 
@@ -416,6 +805,10 @@
     const m = message.match(/^\x01ACTION (.*)\x01$/);
     if (m) { isAction = true; message = m[1]; }
 
+    if (tags.bits && /^\d+$/.test(tags.bits)) {
+      queueAlert("bits", `${tags["display-name"] || user} cheered ${Number(tags.bits).toLocaleString("en-US")} bits!`);
+    }
+
     // commands and cheers (checked before the spam filter, which drops other "!" messages)
     if (!isAction) {
       const c = message.match(CHEER_RE) || message.match(CMD_CHEER);   // "▲ 100", "△100", "!cheer 100"
@@ -468,6 +861,9 @@
 
         if (rest.startsWith("PING")) { ws.send("PONG :tmi.twitch.tv"); return; }
 
+        const un = rest.match(/^:tmi\.twitch\.tv USERNOTICE #[^ ]+(?: :(.*))?$/);
+        if (un) { handleUserNotice(tags, un[1] || ""); return; }
+
         const parts = rest.match(/^:([^!]+)![^ ]+ PRIVMSG #[^ ]+ :(.*)$/);
         if (parts) { addMessage(tags, parts[1], parts[2]); return; }
 
@@ -494,6 +890,7 @@
   }
 
   connect();
+  startFollows();
 })();
 </script>
 </body>

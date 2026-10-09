@@ -26,6 +26,8 @@
      &wheelbias=1.2  wheel odds (higher = rarer big wins; 1.0 pays more than it costs)
      &ting=0         turn the "first message after a quiet minute" ting off
      &tingsec=60     how many quiet seconds before the ting
+     &leadmod=name1,name2  show a LeadMod badge for these logins
+     &silent=name1,name2   show a Silent badge for these logins
      &demo=1         show test buttons                                  */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
@@ -44,6 +46,22 @@
   .msg.out { opacity: 0; }
   .name { font-weight: 700; }
   .name::after { content: ":"; color: #fff; font-weight: 400; margin-right: .35em; }
+  .badges { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 5px; vertical-align: .12em; }
+  .chat-badge {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    font: 700 .62em/1.45 "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .025em; text-shadow: none; vertical-align: middle;
+    color: #fff; background: #53535f;
+  }
+  .chat-badge.broadcaster { background: #9147ff; }
+  .chat-badge.mod { background: #168a48; }
+  .chat-badge.vip { background: #e85d9e; }
+  .chat-badge.founder { background: #a35d27; }
+  .chat-badge.sub { background: #3869c8; }
+  .chat-badge.prime { background: #2865a8; }
+  .chat-badge.leadmod { background: #b45309; }
+  .chat-badge.silent { background: #60636b; }
+  .chat-badge.custom { background: #6b4db8; }
   .action .text { font-style: italic; }
   .emote { height: 1.5em; vertical-align: middle; margin: -.2em 1px; }
 
@@ -142,6 +160,8 @@
 (() => {
   const params  = new URLSearchParams(location.search);
   const CHANNEL = (params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
+  const LEADMOD_USERS = new Set((params.get("leadmod") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
+  const SILENT_USERS = new Set((params.get("silent") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
   const FADE_S  = parseFloat(params.get("fade") ?? "30");
   const MAX_MSG = Math.max(1, parseInt(params.get("max") || "6", 10));
   const MUTE    = params.get("mute") === "1";
@@ -274,6 +294,37 @@
     saveCookies();
   };
   // mods and the broadcaster have infinite cookies
+  const badgeInfo = (tags, user) => {
+    const login = (user || "").toLowerCase();
+    const raw = (tags.badges || "").split(",").filter(Boolean).map(part => part.split("/")[0]);
+    const result = [];
+    const add = (key, label, title) => result.push({ key, label, title });
+    if (raw.includes("broadcaster")) add("broadcaster", "STREAMER", "Channel broadcaster");
+    if (raw.includes("moderator") || tags.mod === "1") add("mod", "MOD", "Moderator");
+    if (LEADMOD_USERS.has(login)) add("leadmod", "LEAD MOD", "Lead moderator");
+    if (raw.includes("vip")) add("vip", "VIP", "VIP");
+    if (raw.includes("founder")) add("founder", "FOUNDER", "Founding subscriber");
+    if (raw.includes("subscriber")) add("sub", "SUB", "Subscriber");
+    if (raw.includes("premium")) add("prime", "PRIME", "Twitch Prime");
+    if (SILENT_USERS.has(login)) add("silent", "SILENT", "Silent user");
+    return result;
+  };
+
+  const appendBadges = (parent, tags, user) => {
+    const badges = badgeInfo(tags, user);
+    if (!badges.length) return;
+    const wrap = document.createElement("span");
+    wrap.className = "badges";
+    badges.forEach(info => {
+      const badge = document.createElement("span");
+      badge.className = "chat-badge " + info.key;
+      badge.textContent = info.label;
+      badge.title = info.title;
+      wrap.appendChild(badge);
+    });
+    parent.appendChild(wrap);
+  };
+
   const isMod = (tags) => tags.mod === "1" || /(^|,)(moderator|broadcaster)\//.test(tags.badges || "");
 
   /* ---------- Cookie cards ---------- */
@@ -657,19 +708,24 @@
     return segs.map(s => s.sfx ? s : { say: s.say.trim() }).filter(s => s.sfx || s.say);
   }
 
-  // always use an English voice, even if the system default is Russian etc.
+  // Use English voices only. Never inherit the OBS/browser language or choose a non-English voice.
   function pickVoice(synth) {
-    const vs = synth.getVoices();
-    const en = vs.filter(v => /^en([-_]|$)/i.test(v.lang));
+    const voices = synth.getVoices();
+    const en = voices.filter(v => /^en([_-]|$)/i.test(v.lang));
     if (TTS_VOICE) {
-      const m = en.find(v => v.name.toLowerCase().includes(TTS_VOICE)) || vs.find(v => v.name.toLowerCase().includes(TTS_VOICE));
-      if (m) return m;
+      const requested = en.find(v => v.name.toLowerCase().includes(TTS_VOICE));
+      if (requested) return requested;
     }
     const us = en.filter(v => /^en[-_]US$/i.test(v.lang));
     const male = /(david|mark|guy|christopher|eric|tony|james|male)/i;
     return us.find(v => male.test(v.name)) || en.find(v => male.test(v.name)) || us[0] || en[0] || null;
   }
-  try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (e) {}
+  try {
+    if ("speechSynthesis" in window) {
+      speechSynthesis.getVoices();
+      speechSynthesis.addEventListener("voiceschanged", () => speechSynthesis.getVoices());
+    }
+  } catch (e) {}
 
   let ttsUtter = null, ttsBusy = false;
   const ttsQueue = [], ttsLastUser = new Map();
@@ -679,9 +735,14 @@
       const synth = window.speechSynthesis;
       if (!synth) return resolve();
       const u = new SpeechSynthesisUtterance(text);
-      u.volume = TTS_VOL; u.lang = "en-US";
+      // Explicit locale keeps pronunciation English even when OBS/browser UI is set to another language.
+      u.volume = TTS_VOL;
+      u.lang = "en-US";
       const v = pickVoice(synth);
-      if (v) { u.voice = v; u.lang = v.lang; }
+      if (v) {
+        u.voice = v;
+        u.lang = /^en[-_]US$/i.test(v.lang) ? "en-US" : "en";
+      }
       let done = false, guard = null;
       const finish = () => { if (done) return; done = true; clearTimeout(guard); resolve(); };
       guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} finish(); }, 20000);
@@ -1067,6 +1128,7 @@
     t.className = "text";
     t.appendChild(buildText(message, tags.emotes));
 
+    appendBadges(el, tags, user);
     el.append(n, t);
     push(el, tags);
   }

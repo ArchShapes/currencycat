@@ -154,13 +154,14 @@
   }
 
   #global-setup-backdrop {
-    position: fixed; inset: 0; z-index: 100000; display: none;
+    position: fixed; inset: 0; z-index: 100000; display: flex;
     align-items: center; justify-content: center; padding: 18px;
     box-sizing: border-box; background: rgba(0,0,0,.72);
     color: #202124; font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
     text-shadow: none;
   }
   #global-setup-backdrop.open { display: flex; }
+  #global-setup-backdrop.closed { display: none; }
   #global-setup {
     width: min(520px, 100%); max-height: 92vh; overflow: auto;
     box-sizing: border-box; padding: 22px; background: #fff;
@@ -269,12 +270,19 @@
     document.getElementById("cfg-tts-enabled").checked = !!settings.tts;
     document.getElementById("cfg-alerts-enabled").checked = !!settings.alerts;
     document.getElementById("cfg-chat-enabled").checked = !!settings.chat;
-    updatePlatformFields();
   }
-  function openSetup() { fillSetup(); setupBackdrop.classList.add("open"); }
-  function closeSetup() { setupBackdrop.classList.remove("open"); }
+  function openSetup() {
+    fillSetup();
+    setupBackdrop.classList.remove("closed");
+    setupBackdrop.classList.add("open");
+  }
+  function closeSetup() {
+    setupBackdrop.classList.remove("open");
+    setupBackdrop.classList.add("closed");
+  }
   fillSetup();
   if (!settings.configured || location.hash.toLowerCase() === "#setup") openSetup();
+  else closeSetup();
   window.addEventListener("hashchange", () => {
     if (location.hash.toLowerCase() === "#setup") openSetup();
     else if (settings.configured) closeSetup();

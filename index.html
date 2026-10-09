@@ -90,21 +90,28 @@
   .cookie .cbar > div { height: 100%; background: linear-gradient(90deg,#ffb347,#ffd98a); border-radius: 4px; }
   .cookie .chint { font-size: .72em; opacity: .75; margin-top: 4px; }
 
-  /* Alerts in chat */
+  /* Minimal Twitch-inspired alerts */
   .msg.alertc {
-    --ac: #ffcf4a;
+    --ac: #9147ff;
     display: flex; align-items: center; gap: 10px;
-    margin: 5px 0; padding: 8px 12px; box-sizing: border-box; max-width: 100%;
-    border-left: 3px solid #ffcf4a; border-radius: 8px;
-    background: rgba(255,207,74,.14); box-shadow: 0 3px 10px rgba(0,0,0,.16);
+    margin: 6px 0; padding: 9px 12px; box-sizing: border-box; max-width: 100%;
+    border: 1px solid color-mix(in srgb, var(--ac) 48%, transparent);
+    border-left: 3px solid var(--ac); border-radius: 9px;
+    background: linear-gradient(105deg, color-mix(in srgb, var(--ac) 18%, #17131f), rgba(16,14,20,.82) 78%);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--ac) 15%, transparent);
     text-shadow: none; animation: cheerIn .22s ease-out both;
   }
-  .alertc .ai { font-size: 1.35em; }
-  .alertc .at { font-weight: 800; overflow-wrap: anywhere; }
-  .alertc .as { font-size: .85em; opacity: .85; margin-top: 2px; white-space: pre-line; overflow-wrap: anywhere; }
+  .alertc .ai, .alert .ai {
+    display: grid; place-items: center; flex: 0 0 2.1em; width: 2.1em; height: 2.1em;
+    box-sizing: border-box; border-radius: 8px; background: rgba(145,71,255,.16);
+    border: 1px solid rgba(180,130,255,.42); color: #d8baff;
+    font: 800 .72em/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .02em;
+    text-shadow: 0 0 12px rgba(145,71,255,.55);
+  }
+  .alertc .at { font-weight: 750; color: #fff; overflow-wrap: anywhere; }
+  .alertc .as { font-size: .85em; color: #d5c9e7; opacity: .9; margin-top: 2px; white-space: pre-line; overflow-wrap: anywhere; }
   .alertc .as:empty { display: none; }
 
-  /* Alerts */
   #alerts {
     position: absolute; inset: 0; z-index: 5;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -113,20 +120,22 @@
     font-size: var(--size, 20px); color: #fff;
   }
   .alert {
-    --ac: #7fd8ff;
-    display: flex; align-items: center; gap: 12px; max-width: min(520px, 92%); box-sizing: border-box;
-    padding: 12px 18px; border-radius: 10px;
-    background: rgba(255, 207, 74, .94); color: #211a08;
-    border: 1px solid rgba(255, 231, 157, .9);
-    box-shadow: 0 5px 18px rgba(0,0,0,.22);
-    animation: alertIn .22s cubic-bezier(.2,.8,.2,1) both;
-    transition: opacity .6s ease, transform .6s ease;
+    --ac: #9147ff;
+    position: relative; isolation: isolate; overflow: hidden;
+    display: flex; align-items: center; gap: 13px; width: max-content; max-width: min(520px, 92%); box-sizing: border-box;
+    padding: 13px 18px; border-radius: 12px;
+    background: linear-gradient(110deg, rgba(36,23,54,.97), rgba(17,16,22,.96) 72%);
+    color: #fff; border: 1px solid rgba(170,120,255,.42);
+    box-shadow: 0 10px 34px rgba(0,0,0,.35), 0 0 22px rgba(145,71,255,.17), inset 0 1px 0 rgba(255,255,255,.06);
+    animation: alertIn .28s cubic-bezier(.2,.8,.2,1) both;
+    transition: opacity .35s ease, transform .35s ease;
   }
-  .alert.out { opacity: 0; transform: translateY(-14px) scale(.97); }
-  .alert .ai { font-size: 2em; filter: drop-shadow(0 0 8px var(--ac)); }
-  .alert .at { font-size: 1.3em; font-weight: 800; overflow-wrap: anywhere; }
-  .alert .as { font-size: .85em; opacity: .8; margin-top: 2px; overflow-wrap: anywhere; }
-  @keyframes alertIn { from { opacity: 0; transform: translateY(-24px) scale(.9); } to { opacity: 1; transform: none; } }
+  .alert::before { content: ""; position: absolute; z-index: -1; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, #c9a5ff, #9147ff); box-shadow: 0 0 16px #9147ff; }
+  .alert::after { content: ""; position: absolute; z-index: -1; width: 150px; height: 150px; right: -70px; top: -100px; border-radius: 50%; background: rgba(145,71,255,.17); filter: blur(25px); }
+  .alert.out { opacity: 0; transform: translateY(-10px) scale(.985); }
+  .alert .at { font-size: 1.08em; font-weight: 750; overflow-wrap: anywhere; }
+  .alert .as { font-size: .82em; color: #d5c9e7; margin-top: 3px; overflow-wrap: anywhere; }
+  @keyframes alertIn { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
 
   #demo { position: fixed; right: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 280px; z-index: 20; }
   #demo button { font: 12px system-ui, sans-serif; padding: 4px 8px; cursor: pointer; }
@@ -586,8 +595,8 @@
   const alertQueue = [];
   let alertBusy = false;
   const ALERT_STYLE = {
-    follow: ["💜", "#c79bff"], raid: ["⚔️", "#ff8a8a"], sub: ["⭐", "#ffd36b"], gift: ["🎁", "#7fe0b0"], bits: ["💎", "#7fd8ff"],
-    hydrate: ["💧", "#6ad4ff"], request: ["🎮", "#b794ff"], cookie: ["🍪", "#ffc46b"], wheel: ["🎡", "#ffc46b"]
+    follow: ["FOLLOW", "#9147ff"], raid: ["RAID", "#a970ff"], sub: ["SUB", "#9147ff"], gift: ["GIFT", "#a970ff"], bits: ["BITS", "#9147ff"],
+    hydrate: ["SIP", "#a970ff"], request: ["LEVEL", "#9147ff"], cookie: ["GIFT", "#a970ff"], wheel: ["SPIN", "#9147ff"]
   };
   const ALERT_NOTES = {
     follow: [783.99, 1046.5, 1318.5],
@@ -1160,9 +1169,8 @@
   const giftWindows = new Map();
   function giftLimit(user, now = Date.now()) {
     const key = user.toLowerCase();
-    const special = key === "twitchyshapes";
-    const windowMs = special ? 60000 : 300000;
-    const limit = special ? 100 : (isMod(currentGiftTags) ? 10 : Infinity);
+    const windowMs = 300000;
+    const limit = isMod(currentGiftTags) ? 10 : Infinity;
     const entries = (giftWindows.get(key) || []).filter(x => now - x.time < windowMs);
     return { entries, windowMs, limit, used: entries.reduce((sum, x) => sum + x.amount, 0) };
   }
@@ -1175,8 +1183,7 @@
     currentGiftTags = tags;
     const limitInfo = giftLimit(user);
     if (limitInfo.used + n > limitInfo.limit) {
-      queueAlert("cookie", `${nameOf(tags, user)} hit the cookie gift limit`, 
-        user.toLowerCase() === "twitchyshapes" ? "TwitchyShapes can gift 100 cookies per minute." : "Mods and creators can gift 10 cookies per 5 minutes.");
+      queueAlert("cookie", `${nameOf(tags, user)} hit the currency gift limit`, "Moderators can gift up to 10 per 5 minutes.");
       return;
     }
     if (!canPay(tags, user, n, "that gift")) return;

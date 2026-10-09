@@ -5,7 +5,14 @@
 <title>bogdanthegdplayer chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  /* Options via URL:  ?channel=name  &fade=30 (seconds, 0 = never)  &size=20 (px)  &bg=1 (dark background) */
+  /* URL options:
+     ?channel=name   channel (default bogdanthegdplayer)
+     &max=6          max messages on screen (default 6)
+     &fade=30        seconds before a message fades (default 30, 0 = never)
+     &size=20        font size in px
+     &bg=1           dark background (for testing in a browser)
+     &mute=1         turn the cheer sound off
+     &spam=0         turn the spam filter off                         */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
   #chat {
@@ -25,12 +32,28 @@
   .name::after { content: ":"; color: #fff; font-weight: 400; margin-right: .35em; }
   .action .text { font-style: italic; }
   .emote { height: 1.5em; vertical-align: middle; margin: -.2em 1px; }
+
+  /* Triangle cheer */
+  .msg.cheer {
+    margin: 4px 0; padding: 7px 12px;
+    border-left: 3px solid #7fd8ff; border-radius: 6px;
+    background: linear-gradient(90deg, rgba(127,216,255,.22), rgba(127,216,255,0) 85%);
+    animation: cheerIn .5s cubic-bezier(.2,.9,.3,1.2) both;
+  }
+  .cheer .tri { color: #7fd8ff; margin-right: .35em; text-shadow: 0 0 10px rgba(127,216,255,.9); }
+  .cheer .who { font-weight: 700; }
+  .cheer .amt { font-weight: 800; color: #aee6ff; }
+
   #status {
     position: absolute; top: 8px; right: 12px; font: 12px system-ui, sans-serif;
-    color: #9aa; opacity: .0; transition: opacity .4s; text-shadow: none;
+    color: #9aa; opacity: 0; transition: opacity .4s; text-shadow: none;
   }
   #status.show { opacity: .8; }
   @keyframes in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes cheerIn {
+    from { opacity: 0; transform: translateX(-16px) scale(.96); }
+    to   { opacity: 1; transform: none; }
+  }
 </style>
 </head>
 <body>
@@ -41,8 +64,10 @@
 (() => {
   const params  = new URLSearchParams(location.search);
   const CHANNEL = (params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
-  const FADE_S  = parseFloat(params.get("fade") ?? "0");   // seconds before a message fades out (0 = stay)
-  const MAX_MSG = 40;                                       // max messages kept on screen
+  const FADE_S  = parseFloat(params.get("fade") ?? "30");
+  const MAX_MSG = Math.max(1, parseInt(params.get("max") || "6", 10));
+  const MUTE    = params.get("mute") === "1";
+  const SPAM_ON = params.get("spam") !== "0";
   if (params.get("size")) document.getElementById("chat").style.setProperty("--size", params.get("size") + "px");
   if (params.get("bg"))   document.body.classList.add("bg");
 
@@ -50,7 +75,103 @@
   const statusEl = document.getElementById("status");
   const setStatus = (t) => { statusEl.textContent = t; statusEl.classList.toggle("show", !!t); };
 
-  // Make dark usernames readable on dark / transparent backgrounds
+  /* ---------- Spam filter ---------- */
+  const BOTS = new Set([
+    "nightbot","streamelements","streamlabs","moobot","fossabot","wizebot","soundalerts",
+    "commanderroot","anotherttvviewer","sery_bot","pokemoncommunitygame","drapsnatt"
+  ]);
+  const lastByUser = new Map();   // user -> { time, text }
+  const recentText = [];          // { time, text } for copypasta detection
+
+  function isSpam(user, tags, msg) {
+    if (!SPAM_ON) return false;
+    const now = Date.now();
+    const text = msg.trim();
+    const lower = text.toLowerCase();
+
+    if (BOTS.has(user.toLowerCase())) return true;
+    if (text.startsWith("!")) return true;                                  // bot commands
+    if (text.length > 200) return true;                                     // walls of text
+    if (/(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|gg|tv|ly|io|xyz|ru|me)\b)/i.test(text)) return true; // links
+    if (/(.)\1{7,}/u.test(text)) return true;                               // "aaaaaaaa"
+    if (/(\b\S+\b)(\s+\1){3,}/i.test(lower)) return true;                   // same word again and again
+
+    const letters = text.replace(/[^a-z]/gi, "");
+    if (letters.length > 12 && letters.replace(/[^A-Z]/g, "").length / letters.length > 0.7) return true; // ALL CAPS
+
+    const words = lower.split(/\s+/).filter(Boolean);
+    if (words.length >= 6 && new Set(words).size / words.length < 0.4) return true; // low variety
+
+    if (tags.emotes) {                                                      // emote spam
+      const n = tags.emotes.split("/").reduce((a, e) => a + ((e.split(":")[1] || "").split(",").length), 0);
+      if (n > 8) return true;
+    }
+
+    // per-user rate limit + exact duplicates
+    const prev = lastByUser.get(user);
+    if (prev) {
+      if (now - prev.time < 1500) return true;
+      if (prev.text === lower && now - prev.time < 30000) return true;
+    }
+    lastByUser.set(user, { time: now, text: lower });
+
+    // same message from many people (copypasta)
+    while (recentText.length && now - recentText[0].time > 20000) recentText.shift();
+    recentText.push({ time: now, text: lower });
+    if (recentText.filter(r => r.text === lower).length >= 3) return true;
+
+    return false;
+  }
+
+  /* ---------- Sound (soft, airy chime) ---------- */
+  let ctx = null, lastSound = 0;
+  function audio() {
+    if (!ctx) {
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+    }
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    return ctx;
+  }
+  // browsers need one click before sound; OBS browser sources don't
+  addEventListener("pointerdown", audio, { once: true });
+
+  function playCheer(amount) {
+    if (MUTE) return;
+    const now = Date.now();
+    if (now - lastSound < 600) return;       // don't stack sounds
+    lastSound = now;
+    const c = audio(); if (!c || c.state !== "running") return;
+
+    const t0 = c.currentTime + 0.02;
+    const master = c.createGain();
+    master.gain.value = 0.22;
+
+    // gentle echo
+    const delay = c.createDelay(); delay.delayTime.value = 0.22;
+    const fb = c.createGain(); fb.gain.value = 0.35;
+    const wet = c.createGain(); wet.gain.value = 0.4;
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
+    master.connect(lp); lp.connect(c.destination);
+    lp.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(c.destination);
+
+    // rising pentatonic arpeggio (E5 → G#5 → B5 → E6); bigger cheers add a top note
+    const notes = [659.25, 830.61, 987.77, 1318.51];
+    if (amount >= 500) notes.push(1661.22);
+    notes.forEach((f, i) => {
+      const t = t0 + i * 0.085;
+      [[f, 1], [f * 2, 0.25]].forEach(([freq, vol]) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = "sine"; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        o.connect(g); g.connect(master);
+        o.start(t); o.stop(t + 0.95);
+      });
+    });
+  }
+
+  /* ---------- Rendering ---------- */
   function readable(hex, name) {
     if (!/^#[0-9a-f]{6}$/i.test(hex || "")) {
       let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -70,7 +191,7 @@
 
   function buildText(message, emoteTag) {
     const frag = document.createDocumentFragment();
-    const chars = Array.from(message);               // code-point safe, matches Twitch indices
+    const chars = Array.from(message);
     const ranges = [];
     if (emoteTag) {
       emoteTag.split("/").forEach(e => {
@@ -97,15 +218,58 @@
     return frag;
   }
 
+  function push(el, tags) {
+    if (tags.id) el.dataset.id = tags.id;
+    chat.appendChild(el);
+    while (chat.children.length > MAX_MSG) chat.removeChild(chat.firstChild);
+    if (FADE_S > 0) {
+      setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 700); }, FADE_S * 1000);
+    }
+  }
+
+  // "▲ 100", "△100", "▲ 1,000"
+  const CHEER_RE = /^\s*[▲△]\s*(\d{1,3}(?:,\d{3})+|\d{1,9})\s*$/u;
+
+  function addCheer(tags, user, amount) {
+    const name = tags["display-name"] || user;
+    const el = document.createElement("div");
+    el.className = "msg cheer";
+
+    const tri = document.createElement("span"); tri.className = "tri"; tri.textContent = "▲";
+    const who = document.createElement("span"); who.className = "who"; who.textContent = name;
+    who.style.color = readable(tags.color, name);
+    const amt = document.createElement("span"); amt.className = "amt"; amt.textContent = amount.toLocaleString("en-US");
+
+    el.append(tri, who,
+      document.createTextNode(" just cheered "), amt,
+      document.createTextNode(amount === 1 ? " triangle!" : " triangles!"));
+
+    push(el, tags);
+    playCheer(amount);
+  }
+
   function addMessage(tags, user, message) {
     let isAction = false;
     const m = message.match(/^\x01ACTION (.*)\x01$/);
     if (m) { isAction = true; message = m[1]; }
 
+    // triangle cheer (checked before the spam filter, with its own light rate limit)
+    const c = !isAction && message.match(CHEER_RE);
+    if (c) {
+      const amount = parseInt(c[1].replace(/,/g, ""), 10);
+      const prev = lastByUser.get(user + ":cheer") || 0;
+      if (amount > 0 && Date.now() - prev > 1500) {
+        lastByUser.set(user + ":cheer", Date.now());
+        addCheer(tags, user, amount);
+      }
+      return;
+    }
+
+    if (isSpam(user, tags, message)) return;
+
     const name = tags["display-name"] || user;
     const el = document.createElement("div");
     el.className = "msg" + (isAction ? " action" : "");
-    if (tags.id) el.dataset.id = tags.id;
 
     const n = document.createElement("span");
     n.className = "name";
@@ -117,17 +281,12 @@
     t.appendChild(buildText(message, tags.emotes));
 
     el.append(n, t);
-    chat.appendChild(el);
-
-    while (chat.children.length > MAX_MSG) chat.removeChild(chat.firstChild);
-
-    if (FADE_S > 0) {
-      setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 700); }, FADE_S * 1000);
-    }
+    push(el, tags);
   }
 
   function removeBy(sel) { chat.querySelectorAll(sel).forEach(e => e.remove()); }
 
+  /* ---------- Twitch IRC ---------- */
   let ws, retry = 0;
   function connect() {
     setStatus("connecting…");
@@ -154,10 +313,11 @@
 
         if (/ CLEARMSG /.test(rest) && tags["target-msg-id"]) { removeBy(`[data-id="${tags["target-msg-id"]}"]`); return; }
         if (/ CLEARCHAT /.test(rest)) {
-          const target = rest.split(":").pop();
-          if (rest.match(/CLEARCHAT #[^ ]+ :/)) {
+          if (/CLEARCHAT #[^ ]+ :/.test(rest)) {
+            const target = rest.split(":").pop().toLowerCase();
             chat.querySelectorAll(".msg").forEach(e => {
-              if (e.querySelector(".name").textContent.toLowerCase() === target.toLowerCase()) e.remove();
+              const n = e.querySelector(".name, .who");
+              if (n && n.textContent.toLowerCase() === target) e.remove();
             });
           } else chat.innerHTML = "";
         }

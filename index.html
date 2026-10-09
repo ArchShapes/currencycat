@@ -26,6 +26,8 @@
      &wheelbias=1.2  wheel odds (higher = rarer big wins; 1.0 pays more than it costs)
      &ting=0         turn the "first message after a quiet minute" ting off
      &tingsec=60     how many quiet seconds before the ting
+     &leadmod=name1,name2  show a LeadMod badge for these logins
+     &silent=name1,name2   show a Silent badge for these logins
      &demo=1         show test buttons                                  */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
@@ -44,19 +46,33 @@
   .msg.out { opacity: 0; }
   .name { font-weight: 700; }
   .name::after { content: ":"; color: #fff; font-weight: 400; margin-right: .35em; }
+  .badges { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 5px; vertical-align: .12em; }
+  .chat-badge {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    font: 700 .62em/1.45 "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .025em; text-shadow: none; vertical-align: middle;
+    color: #fff; background: #53535f;
+  }
+  .chat-badge.broadcaster { background: #9147ff; }
+  .chat-badge.mod { background: #168a48; }
+  .chat-badge.vip { background: #e85d9e; }
+  .chat-badge.founder { background: #a35d27; }
+  .chat-badge.sub { background: #3869c8; }
+  .chat-badge.prime { background: #2865a8; }
+  .chat-badge.leadmod { background: #b45309; }
+  .chat-badge.silent { background: #60636b; }
+  .chat-badge.custom { background: #6b4db8; }
   .action .text { font-style: italic; }
   .emote { height: 1.5em; vertical-align: middle; margin: -.2em 1px; }
 
   /* Triangle cheer */
   .msg.cheer {
-    margin: 4px 0; padding: 7px 12px;
-    border-left: 3px solid #7fd8ff; border-radius: 6px;
-    background: linear-gradient(90deg, rgba(127,216,255,.22), rgba(127,216,255,0) 85%);
-    animation: cheerIn .5s cubic-bezier(.2,.9,.3,1.2) both;
+    margin: 4px 0; padding: 7px 11px; border-left: 3px solid #ffcf4a;
+    border-radius: 6px; background: rgba(255,207,74,.13);
+    animation: cheerIn .22s ease-out both;
   }
-  .cheer .tri { color: #7fd8ff; margin-right: .35em; text-shadow: 0 0 10px rgba(127,216,255,.9); }
   .cheer .who { font-weight: 700; }
-  .cheer .amt { font-weight: 800; color: #aee6ff; }
+  .cheer .amt { font-weight: 800; color: #ffcf4a; }
 
   /* Cookie cards */
   .msg.cookie {
@@ -73,33 +89,34 @@
 
   /* Alerts in chat */
   .msg.alertc {
-    --ac: #7fd8ff;
-    display: flex; align-items: center; gap: 12px;
-    margin: 5px 0; padding: 8px 14px; box-sizing: border-box; max-width: 100%;
-    border-left: 4px solid var(--ac); border-radius: 10px;
-    background: rgba(14,14,20,.8); box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 0 12px var(--ac);
-    text-shadow: none;
-    animation: cheerIn .5s cubic-bezier(.2,.9,.3,1.2) both;
+    --ac: #ffcf4a;
+    display: flex; align-items: center; gap: 10px;
+    margin: 5px 0; padding: 8px 12px; box-sizing: border-box; max-width: 100%;
+    border-left: 3px solid #ffcf4a; border-radius: 8px;
+    background: rgba(255,207,74,.14); box-shadow: 0 3px 10px rgba(0,0,0,.16);
+    text-shadow: none; animation: cheerIn .22s ease-out both;
   }
-  .alertc .ai { font-size: 1.7em; filter: drop-shadow(0 0 6px var(--ac)); }
+  .alertc .ai { font-size: 1.35em; }
   .alertc .at { font-weight: 800; overflow-wrap: anywhere; }
   .alertc .as { font-size: .85em; opacity: .85; margin-top: 2px; white-space: pre-line; overflow-wrap: anywhere; }
   .alertc .as:empty { display: none; }
 
   /* Alerts */
   #alerts {
-    position: absolute; top: 14px; left: 0; right: 0; z-index: 5;
-    display: flex; flex-direction: column; align-items: center; pointer-events: none;
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; pointer-events: none; padding: 18px; box-sizing: border-box;
     font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
     font-size: var(--size, 20px); color: #fff;
   }
   .alert {
     --ac: #7fd8ff;
-    display: flex; align-items: center; gap: 14px; max-width: 92%; box-sizing: border-box;
-    padding: 14px 24px; border-radius: 16px;
-    background: rgba(14,14,20,.88); border: 1px solid var(--ac);
-    box-shadow: 0 8px 24px rgba(0,0,0,.5), 0 0 14px var(--ac);
-    animation: alertIn .55s cubic-bezier(.2,.9,.3,1.25) both;
+    display: flex; align-items: center; gap: 12px; max-width: min(520px, 92%); box-sizing: border-box;
+    padding: 12px 18px; border-radius: 10px;
+    background: rgba(255, 207, 74, .94); color: #211a08;
+    border: 1px solid rgba(255, 231, 157, .9);
+    box-shadow: 0 5px 18px rgba(0,0,0,.22);
+    animation: alertIn .22s cubic-bezier(.2,.8,.2,1) both;
     transition: opacity .6s ease, transform .6s ease;
   }
   .alert.out { opacity: 0; transform: translateY(-14px) scale(.97); }
@@ -143,6 +160,8 @@
 (() => {
   const params  = new URLSearchParams(location.search);
   const CHANNEL = (params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
+  const LEADMOD_USERS = new Set((params.get("leadmod") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
+  const SILENT_USERS = new Set((params.get("silent") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
   const FADE_S  = parseFloat(params.get("fade") ?? "30");
   const MAX_MSG = Math.max(1, parseInt(params.get("max") || "6", 10));
   const MUTE    = params.get("mute") === "1";
@@ -242,13 +261,8 @@
     const master = c.createGain();
     master.gain.value = 0.22;
 
-    // gentle echo
-    const delay = c.createDelay(); delay.delayTime.value = 0.22;
-    const fb = c.createGain(); fb.gain.value = 0.35;
-    const wet = c.createGain(); wet.gain.value = 0.4;
     const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
     master.connect(lp); lp.connect(c.destination);
-    lp.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(c.destination);
 
     // rising pentatonic arpeggio (E5 → G#5 → B5 → E6); bigger cheers add a top note
     const notes = [659.25, 830.61, 987.77, 1318.51];
@@ -260,7 +274,7 @@
         o.type = "sine"; o.frequency.value = freq;
         g.gain.setValueAtTime(0.0001, t);
         g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
         o.connect(g); g.connect(master);
         o.start(t); o.stop(t + 0.95);
       });
@@ -270,7 +284,8 @@
   /* ---------- Cookies ---------- */
   const STORE_KEY = "cookies:" + CHANNEL;
   let cookies = {};
-  try { cookies = JSON.parse(localStorage.getItem(STORE_KEY) || "{}") || {}; } catch (e) { cookies = {}; }
+  // Every fresh launch starts a new cookie season.
+  try { localStorage.setItem(STORE_KEY, "{}"); } catch (e) {}
   const saveCookies = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(cookies)); } catch (e) {} };
   const bal = (u) => cookies[u.toLowerCase()] || 0;
   const addCookies = (u, n) => {
@@ -279,6 +294,37 @@
     saveCookies();
   };
   // mods and the broadcaster have infinite cookies
+  const badgeInfo = (tags, user) => {
+    const login = (user || "").toLowerCase();
+    const raw = (tags.badges || "").split(",").filter(Boolean).map(part => part.split("/")[0]);
+    const result = [];
+    const add = (key, label, title) => result.push({ key, label, title });
+    if (raw.includes("broadcaster")) add("broadcaster", "STREAMER", "Channel broadcaster");
+    if (raw.includes("moderator") || tags.mod === "1") add("mod", "MOD", "Moderator");
+    if (LEADMOD_USERS.has(login)) add("leadmod", "LEAD MOD", "Lead moderator");
+    if (raw.includes("vip")) add("vip", "VIP", "VIP");
+    if (raw.includes("founder")) add("founder", "FOUNDER", "Founding subscriber");
+    if (raw.includes("subscriber")) add("sub", "SUB", "Subscriber");
+    if (raw.includes("premium")) add("prime", "PRIME", "Twitch Prime");
+    if (SILENT_USERS.has(login)) add("silent", "SILENT", "Silent user");
+    return result;
+  };
+
+  const appendBadges = (parent, tags, user) => {
+    const badges = badgeInfo(tags, user);
+    if (!badges.length) return;
+    const wrap = document.createElement("span");
+    wrap.className = "badges";
+    badges.forEach(info => {
+      const badge = document.createElement("span");
+      badge.className = "chat-badge " + info.key;
+      badge.textContent = info.label;
+      badge.title = info.title;
+      wrap.appendChild(badge);
+    });
+    parent.appendChild(wrap);
+  };
+
   const isMod = (tags) => tags.mod === "1" || /(^|,)(moderator|broadcaster)\//.test(tags.badges || "");
 
   /* ---------- Cookie cards ---------- */
@@ -327,7 +373,7 @@
     cheerLast.set(user, now);
     addCheer(tags, user, amount);
   }
-  const CMD_CHEER = /^!cheer\s+(\d{1,3}(?:,\d{3})+|\d{1,9})\s*$/i;
+
 
   /* ---------- Alerts ---------- */
   const alertsEl = document.getElementById("alerts");
@@ -352,12 +398,8 @@
     const c = audio(); if (!c || c.state !== "running") return;
     const t0 = c.currentTime + 0.02;
     const master = c.createGain(); master.gain.value = vol;
-    const delay = c.createDelay(); delay.delayTime.value = 0.22;
-    const fb = c.createGain(); fb.gain.value = 0.35;
-    const wet = c.createGain(); wet.gain.value = 0.4;
     const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
     master.connect(lp); lp.connect(c.destination);
-    lp.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(c.destination);
     notes.forEach((f, i) => {
       const t = t0 + i * step;
       [[f, 1], [f * 2, 0.25]].forEach(([freq, v]) => {
@@ -365,7 +407,7 @@
         o.type = "sine"; o.frequency.value = freq;
         g.gain.setValueAtTime(0.0001, t);
         g.gain.exponentialRampToValueAtTime(v, t + 0.015);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
         o.connect(g); g.connect(master);
         o.start(t); o.stop(t + 0.95);
       });
@@ -393,7 +435,7 @@
   let lastAlertSnd = 0;
   function alertSound(kind) {
     const now = Date.now();
-    if (now - lastAlertSnd < 400) return;                    // bursts share one sound
+    if (now - lastAlertSnd < 120) return;                    // bursts share one sound
     lastAlertSnd = now;
     if (kind === "hydrate") waterDrop(); else chime(ALERT_NOTES[kind] || ALERT_NOTES.sub);
   }
@@ -424,8 +466,7 @@
   }
 
   function nextAlert() {
-    if (alertBusy || !alertQueue.length) return;
-    alertBusy = true;
+    if (!alertQueue.length) return;
     const a = alertQueue.shift();
     const [icon, color] = ALERT_STYLE[a.kind] || ALERT_STYLE.sub;
     const el = document.createElement("div");
@@ -441,7 +482,7 @@
     alertSound(a.kind);
     setTimeout(() => {
       el.classList.add("out");
-      setTimeout(() => { el.remove(); alertBusy = false; nextAlert(); }, 600);
+      setTimeout(() => { el.remove(); nextAlert(); }, 250);
     }, ALERT_SEC * 1000);
   }
 
@@ -676,7 +717,8 @@
       if (m) return m;
     }
     const us = en.filter(v => /^en[-_]US$/i.test(v.lang));
-    return us.find(v => /(natural|online|aria|jenny|zira|david|google)/i.test(v.name)) || us[0] || en[0] || null;
+    const male = /(david|mark|guy|christopher|eric|tony|james|male)/i;
+    return us.find(v => male.test(v.name)) || en.find(v => male.test(v.name)) || us[0] || en[0] || null;
   }
   try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (e) {}
 
@@ -715,7 +757,7 @@
       }
     } catch (e) {}
     ttsBusy = false;
-    setTimeout(runTts, 700);
+    setTimeout(runTts, 120);
   }
 
   function handleTts(tags, user, message) {
@@ -854,16 +896,35 @@
     showRequests(tags);
   }
 
+  const giftWindows = new Map();
+  function giftLimit(user, now = Date.now()) {
+    const key = user.toLowerCase();
+    const special = key === "twitchyshapes";
+    const windowMs = special ? 60000 : 300000;
+    const limit = special ? 100 : (isMod(currentGiftTags) ? 10 : Infinity);
+    const entries = (giftWindows.get(key) || []).filter(x => now - x.time < windowMs);
+    return { entries, windowMs, limit, used: entries.reduce((sum, x) => sum + x.amount, 0) };
+  }
+  let currentGiftTags = {};
   function doGift(tags, user, arg) {
     const m = arg.match(/^@?(\w{1,25})\s+(\d{1,4})$/);
     if (!m) return;
     const to = m[1].toLowerCase(), n = parseInt(m[2], 10);
     if (n < 1 || to === user.toLowerCase() || cdLeft("gift:" + user, 3000)) return;
+    currentGiftTags = tags;
+    const limitInfo = giftLimit(user);
+    if (limitInfo.used + n > limitInfo.limit) {
+      queueAlert("cookie", `${nameOf(tags, user)} hit the cookie gift limit`, 
+        user.toLowerCase() === "twitchyshapes" ? "TwitchyShapes can gift 100 cookies per minute." : "Mods and creators can gift 10 cookies per 5 minutes.");
+      return;
+    }
     if (!canPay(tags, user, n, "that gift")) return;
     pay(tags, user, n);
     addCookies(to, n);
+    const key = user.toLowerCase();
+    giftWindows.set(key, [...limitInfo.entries, { time: Date.now(), amount: n }]);
     markCd("gift:" + user);
-    queueAlert("cookie", `${nameOf(tags, user)} gifted ${n} 🍪 to ${m[1]}!`, "");
+    queueAlert("cookie", `${nameOf(tags, user)} gifted ${n} ${n === 1 ? "cookie" : "cookies"} to ${m[1]}!`, "");
   }
 
   // mods/broadcaster only, completely silent: !givecookies @name 20  (negative numbers take cookies away)
@@ -904,7 +965,7 @@
       "Gift":     () => queueAlert("gift", "SampleViewer gifted a sub to Friend!", "Tier 1"),
       "Mass gift":() => queueAlert("gift", "SampleViewer is gifting 5 subs!", "Tier 1"),
       "Bits":     () => queueAlert("bits", "SampleViewer cheered 100 bits!"),
-      "Triangles":() => addCheer({ "display-name": "SampleViewer" }, "sampleviewer", 50),
+      "Cheer cookies":() => addCheer({ "display-name": "SampleViewer" }, "sampleviewer", 50),
       "TTS+sfx":  () => handleTts(modTags, "demo", "!tts Hello there (meow) this is a test (vineboom) (gunshot) (airhorns)"),
       "Cookies":  () => { noteLast.clear(); addCookieCard({ "display-name": "SampleViewer" }, "sampleviewer", false); },
       "Short":    () => { noteLast.clear(); addCookieCard({ "display-name": "SampleViewer" }, "sampleviewer", true); },
@@ -986,23 +1047,29 @@
     }
   }
 
-  // "▲ 100", "△100", "▲ 1,000"
-  const CHEER_RE = /^\s*[▲△]\s*(\d{1,3}(?:,\d{3})+|\d{1,9})\s*$/u;
+  // !cheer 100 or !cheercookies 100
+  const CHEER_RE = /^\s*(?:!cheercookies|!cheer)\s+(\d{1,3}(?:,\d{3})+|\d{1,9})\s*$/i;
+  const activeChatters = new Map();
 
   function addCheer(tags, user, amount) {
     const name = tags["display-name"] || user;
+    const now = Date.now();
+    activeChatters.set(user.toLowerCase(), { name, seen: now });
+    const recipients = [...activeChatters.entries()]
+      .filter(([login, info]) => login !== user.toLowerCase() && now - info.seen < 10 * 60 * 1000)
+      .map(([login]) => login);
+    const pool = recipients.length ? recipients : [user.toLowerCase()];
+    const each = Math.floor(amount / pool.length);
+    const remainder = amount % pool.length;
+    pool.forEach((login, i) => addCookies(login, each + (i < remainder ? 1 : 0)));
+
     const el = document.createElement("div");
     el.className = "msg cheer";
-
-    const tri = document.createElement("span"); tri.className = "tri"; tri.textContent = "▲";
     const who = document.createElement("span"); who.className = "who"; who.textContent = name;
     who.style.color = readable(tags.color, name);
     const amt = document.createElement("span"); amt.className = "amt"; amt.textContent = amount.toLocaleString("en-US");
-
-    el.append(tri, who,
-      document.createTextNode(" just cheered "), amt,
-      document.createTextNode(amount === 1 ? " triangle!" : " triangles!"));
-
+    el.append(who, document.createTextNode(" cheered "), amt,
+      document.createTextNode(` cookies. Shared across ${pool.length} ${pool.length === 1 ? "viewer" : "viewers"}!`));
     push(el, tags);
     playCheer(amount);
   }
@@ -1022,7 +1089,8 @@
 
     // commands and cheers (checked before the spam filter, which drops other "!" messages)
     if (!isAction) {
-      const c = message.match(CHEER_RE) || message.match(CMD_CHEER);   // "▲ 100", "△100", "!cheer 100"
+      activeChatters.set(user.toLowerCase(), { name: tags["display-name"] || user, seen: Date.now() });
+      const c = message.match(CHEER_RE);
       if (c) { tryCheer(tags, user, c[1]); return; }
       if (/^!tts(\s|$)/i.test(message)) { handleTts(tags, user, message); return; }
       if (/^!cookies?\s*$/i.test(message)) { showBalance(tags, user); return; }
@@ -1050,6 +1118,7 @@
     t.className = "text";
     t.appendChild(buildText(message, tags.emotes));
 
+    appendBadges(el, tags, user);
     el.append(n, t);
     push(el, tags);
   }

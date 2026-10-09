@@ -163,83 +163,69 @@
     to   { opacity: 1; transform: none; }
   }
 
+  /* ---------- Setup dialog ---------- */
   #global-setup-backdrop {
     position: fixed; inset: 0; z-index: 100000; display: flex;
-    align-items: center; justify-content: center; padding: 18px;
-    box-sizing: border-box; background: radial-gradient(ellipse at 15% 20%, rgba(145,71,255,.18), transparent 42%), radial-gradient(ellipse at 85% 80%, rgba(111,53,196,.13), transparent 38%), rgba(7,7,10,.88);
-    background-size: 140% 140%; animation: setupBackdropDrift 16s ease-in-out infinite alternate;
-    color: #eae8ef; font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
-    text-shadow: none; backdrop-filter: blur(8px);
+    align-items: center; justify-content: center; padding: 18px; box-sizing: border-box;
+    background: rgba(8,8,10,.86); backdrop-filter: blur(3px);
+    font: 14px/1.45 Inter, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    color: #e9e9ed; text-shadow: none;
   }
   #global-setup-backdrop.open { display: flex; }
   #global-setup-backdrop.closed { display: none; }
   #global-setup {
-    position: relative; width: min(560px, 100%); max-height: 92vh; overflow: auto;
-    box-sizing: border-box; padding: 24px; background: linear-gradient(145deg, rgba(25,24,31,.98), rgba(16,16,20,.98));
-    border: 1px solid rgba(178,139,255,.25); border-radius: 14px;
-    box-shadow: 0 22px 70px rgba(0,0,0,.45), 0 0 42px rgba(145,71,255,.09);
-    animation: setupPanelIn .38s cubic-bezier(.2,.8,.2,1) both;
+    position: relative; display: flex; flex-direction: column; overflow: hidden;
+    width: min(620px, 100%); max-height: min(92vh, 880px); box-sizing: border-box;
+    background: #171719; border: 1px solid #343438; border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.4); animation: setupPanelIn .18s ease-out both;
   }
-  #global-setup::before { content: ""; position: absolute; top: 0; left: 22px; right: 22px; height: 2px; border-radius: 0 0 2px 2px; background: linear-gradient(90deg, transparent, #9147ff, #c4a3ff, transparent); transform-origin: center; animation: setupLine 4s ease-in-out infinite; }
-  #global-setup h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 5px; font-size: 21px; font-weight: 650; letter-spacing: -.025em; }
-  #global-setup .setup-note { margin: 0 0 18px; color: #aaa5b5; }
-  .setup-live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #a879ff; box-shadow: 0 0 0 0 rgba(168,121,255,.55); animation: setupPulse 2s ease-out infinite; }
-  #global-setup .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  #global-setup label { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-  #global-setup input, #global-setup select {
-    box-sizing: border-box; width: 100%; min-width: 0; padding: 10px 11px;
-    border: 1px solid #3c3945; border-radius: 7px; background: #111116;
-    color: #f4f1f8; font: inherit; outline: none; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
-  }
-  #global-setup input:focus, #global-setup select:focus { border-color: #a879ff; background: #17141e; box-shadow: 0 0 0 3px rgba(145,71,255,.14); }
-  #global-setup label { color: #d9d5e0; font-size: 12px; }
-  #global-setup .setup-checks { display: flex; flex-wrap: wrap; gap: 18px; margin: 15px 0; }
-  #global-setup .setup-check { display: flex; flex-direction: row; align-items: center; gap: 7px; }
-  #global-setup .setup-check input { width: auto; }
-  #global-setup .setup-actions { display: flex; gap: 8px; margin-top: 16px; }
-  #global-setup button { border: 1px solid transparent; border-radius: 7px; padding: 10px 13px; cursor: pointer; font: inherit; transition: transform .16s ease, background .16s ease, border-color .16s ease; }
-  #global-setup button:hover { transform: translateY(-1px); }
-  #global-setup button:active { transform: translateY(0) scale(.99); }
-  #global-setup-save { flex: 1; background: #9147ff; color: #fff; box-shadow: 0 5px 18px rgba(145,71,255,.2); }
-  #global-setup-save:hover { background: #a66aff; }
-  #global-setup-cancel { background: #24222a; border-color: #3b3744; color: #e4e0e9; }
-  #global-setup-status { min-height: 1.3em; margin: 10px 0 0; color: #bca4ed; font-size: 12px; }
-  #setup-hint { position: fixed; z-index: 9999; top: 14px; left: 50%; transform: translate(-50%, -10px); padding: 9px 13px; border: 1px solid rgba(176,135,255,.35); border-radius: 8px; background: rgba(24,20,32,.94); color: #e9ddff; font: 12px/1.4 "Segoe UI", sans-serif; opacity: 0; pointer-events: none; transition: opacity .22s ease, transform .22s ease; box-shadow: 0 8px 28px rgba(0,0,0,.22); }
-  #setup-hint.show { opacity: 1; transform: translate(-50%, 0); }
+  .setup-head { padding: 20px 24px 14px; border-bottom: 1px solid #2a2a2e; }
+  #global-setup h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 19px; font-weight: 650; letter-spacing: -.02em; }
+  .setup-live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #9147ff; }
+  #global-setup .setup-note { margin: 0; color: #a5a5ad; font-size: 13px; line-height: 1.5; }
+  #global-setup kbd { padding: 1px 5px; border: 1px solid #3f3f46; border-bottom-width: 2px; border-radius: 4px; background: #202024; font: 11px ui-monospace, Consolas, monospace; color: #d6d6dc; }
 
-  /* Plain, compact setup UI: no glow, animated gradients, or decorative effects. */
-  #global-setup-backdrop {
-    background: rgba(8, 8, 10, .88);
-    background-size: auto; animation: none; backdrop-filter: blur(3px);
-    font-family: Inter, "Segoe UI Variable", "Segoe UI", sans-serif;
-    color: #e9e9ed;
+  .setup-body { padding: 4px 24px; overflow-y: auto; flex: 1 1 auto; }
+  .setup-section { padding: 16px 0; border-bottom: 1px solid #26262a; }
+  .setup-section:last-child { border-bottom: 0; }
+  .setup-section h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #9a9aa4; }
+  #global-setup .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+  #global-setup .span-2 { grid-column: 1 / -1; }
+  #global-setup label { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: #c9c9d0; font-size: 12px; font-weight: 550; }
+  #global-setup label .opt { color: #7e7e88; font-weight: 400; }
+  #global-setup .hint:empty { display: none; }
+  #global-setup .hint { margin: 0; color: #84848e; font-size: 11.5px; font-weight: 400; line-height: 1.4; }
+  #global-setup input:not([type=checkbox]), #global-setup select {
+    box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 11px;
+    border: 1px solid #3a3a40; border-radius: 6px; background: #101012;
+    color: #f2f2f4; font: inherit; outline: none; transition: border-color .12s ease, box-shadow .12s ease;
   }
-  #global-setup {
-    width: min(540px, 100%); padding: 24px;
-    background: #171719; border: 1px solid #343438; border-radius: 10px;
-    box-shadow: 0 18px 50px rgba(0,0,0,.32); animation: setupPanelIn .18s ease-out both;
-  }
-  #global-setup::before { display: none; }
-  #global-setup h2 { font-size: 20px; font-weight: 650; letter-spacing: -.035em; }
-  .setup-live-dot { width: 7px; height: 7px; background: #9147ff; box-shadow: none; animation: none; }
-  #global-setup .setup-note { color: #a5a5ad; font-size: 13px; line-height: 1.55; }
-  #global-setup .setup-grid { gap: 14px; }
-  #global-setup label { color: #c9c9d0; font-size: 12px; font-weight: 550; }
-  #global-setup input, #global-setup select {
-    padding: 10px 11px; border: 1px solid #3a3a40; border-radius: 6px;
-    background: #101012; color: #f2f2f4; font: inherit; transition: border-color .12s ease;
-  }
-  #global-setup input:focus, #global-setup select:focus { border-color: #a970ff; background: #101012; box-shadow: none; }
-  #global-setup .setup-checks { gap: 16px; }
-  #global-setup button { border-radius: 6px; padding: 10px 13px; font-size: 13px; font-weight: 600; transition: background .12s ease, border-color .12s ease; }
-  #global-setup button:hover { transform: none; }
-  #global-setup button:active { transform: none; }
-  #global-setup-save { background: #9147ff; box-shadow: none; }
+  #global-setup input::placeholder { color: #5f5f68; }
+  #global-setup input:focus, #global-setup select:focus { border-color: #a970ff; box-shadow: 0 0 0 3px rgba(145,71,255,.18); }
+  #global-setup input[readonly] { color: #b9b9c2; background: #131316; cursor: text; }
+  #global-setup .setup-check { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #e2e2e7; cursor: pointer; }
+  #global-setup .setup-check input { width: 16px; height: 16px; margin: 0; accent-color: #9147ff; }
+  #global-setup .setup-checks { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+  #global-setup details { margin-top: 14px; border: 1px solid #2c2c31; border-radius: 8px; background: #141416; }
+  #global-setup summary { padding: 9px 12px; cursor: pointer; font-size: 12px; font-weight: 600; color: #b4b4bd; user-select: none; }
+  #global-setup details[open] summary { border-bottom: 1px solid #2c2c31; }
+  #global-setup details .setup-grid { padding: 12px; }
+
+  #global-setup button { border: 1px solid transparent; border-radius: 6px; padding: 9px 14px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; transition: background .12s ease, border-color .12s ease, opacity .12s ease; }
+  #global-setup button:disabled { opacity: .55; cursor: default; }
+  #global-setup-save { background: #9147ff; color: #fff; }
   #global-setup-save:hover { background: #7d35e8; }
   #global-setup-cancel, #global-tts-test { background: #232326; border-color: #414146; color: #e8e8ec; }
-  #global-setup-cancel:hover, #global-tts-test:hover { background: #2c2c30; }
-  #global-setup-status { color: #c5a8ff; }
-  #setup-hint { border-color: #393940; background: #1a1a1d; color: #ededf0; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+  #global-setup-cancel:hover, #global-tts-test:hover:not(:disabled) { background: #2c2c30; }
+  .setup-tts-test { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .setup-tts-test #global-setup-tts-status { flex: 1; min-height: 1.3em; font-size: 12px; color: #a5a5ad; }
+  .setup-footer { display: flex; align-items: center; gap: 10px; padding: 14px 24px; border-top: 1px solid #2a2a2e; background: #141416; }
+  #global-setup-status { flex: 1; min-height: 1.3em; margin: 0; font-size: 12px; color: #a5a5ad; }
+  #global-setup-status.ok, #global-setup-tts-status.ok { color: #7ee2a8; }
+  #global-setup-status.error, #global-setup-tts-status.error { color: #ff9a9a; }
+
+  #setup-hint { position: fixed; z-index: 9999; top: 14px; left: 50%; transform: translate(-50%, -10px); padding: 9px 13px; border: 1px solid #393940; border-radius: 8px; background: #1a1a1d; color: #ededf0; font: 12px/1.4 "Segoe UI", sans-serif; opacity: 0; pointer-events: none; transition: opacity .22s ease, transform .22s ease; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+  #setup-hint.show { opacity: 1; transform: translate(-50%, 0); }
   .msg.alertc { box-shadow: none; background: rgba(18,18,22,.94); border-color: color-mix(in srgb, var(--ac) 35%, #343438); }
   .alertc .ai, .alert .ai { background: #242229; border-color: #414047; }
   .alert-icon { filter: none; }
@@ -247,8 +233,13 @@
   .alert::before { background: var(--ac); box-shadow: none; }
   .alert::after { display: none; }
   @keyframes setupPanelIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { #global-setup-backdrop, #global-setup, .setup-live-dot, #global-setup::before { animation: none !important; transition: none !important; } }
-  @media (max-width: 480px) { #global-setup { padding: 18px; } #global-setup .setup-grid { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { #global-setup, #setup-hint { animation: none !important; transition: none !important; } }
+  @media (max-width: 520px) {
+    #global-setup .setup-grid { grid-template-columns: 1fr; }
+    .setup-head, .setup-footer { padding-left: 16px; padding-right: 16px; }
+    .setup-body { padding: 2px 16px; }
+    .setup-footer { flex-wrap: wrap; } #global-setup-status { flex-basis: 100%; }
+  }
 
 </style>
 </head>
@@ -271,64 +262,108 @@
   <symbol id="ico-volume" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z M17 9a5 5 0 0 1 0 6M19 5a9 9 0 0 1 0 14"/></symbol>
 </svg>
 
-<div id="setup-hint" role="status">Go to /#setup to change these settings.</div>
+<div id="setup-hint" role="status">Saved. Press F2 to reopen setup.</div>
 <div id="chat"></div>
 <div id="alerts"></div>
 <div id="status"></div>
 <div id="global-setup-backdrop" role="dialog" aria-modal="true" aria-labelledby="global-setup-title">
   <section id="global-setup">
-    <h2 id="global-setup-title"><span class="setup-live-dot" aria-hidden="true"></span>Overlay setup</h2>
-    <p class="setup-note">Set this up once. Your choices are saved in this browser. Configure your Twitch channel and overlay preferences here. Press E to force English (US), or F2 to reopen setup.</p>
-    <div class="setup-grid">
-      <label>Twitch API Client ID (for official badge images)
-        <input id="cfg-twitch-client-id" autocomplete="off" placeholder="Twitch developer client ID">
-      </label>
-      <label>Twitch OAuth access token (for official badge images)
-        <input id="cfg-twitch-token" type="password" autocomplete="off" placeholder="OAuth access token">
-      </label>
-      <label>Twitch channel / account
-        <input id="cfg-channel" autocomplete="off" placeholder="yourchannel">
-      </label>
-      <label>Overlay display name
-        <input id="cfg-account" autocomplete="off" placeholder="My Stream">
-      </label>
-      <label>Currency name
-        <input id="cfg-currency" autocomplete="off" placeholder="Cookies">
-      </label>
-      <label>Currency icon
-        <select id="cfg-symbol">
-          <option value="cookie">Cookie</option>
-          <option value="money">Money</option>
-          <option value="box">Box</option>
-          <option value="moon">Moon</option>
-          <option value="fries">Fries</option>
-          <option value="heart">Heart</option>
-        </select>
-      </label>
-      <label>Third-party TTS API endpoint
-        <input id="cfg-tts-url" autocomplete="off" placeholder="https://your-service.example/speak">
-      </label>
-      <label>Voice ID
-        <input id="cfg-voice" autocomplete="off" placeholder="English voice ID">
-      </label>
-      <label>API key (if required)
-        <input id="cfg-api-key" type="password" autocomplete="off" placeholder="API key">
-      </label>
-      <label>Default language
-        <select id="cfg-language"><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option></select>
-      </label>
+    <header class="setup-head">
+      <h2 id="global-setup-title"><span class="setup-live-dot" aria-hidden="true"></span>Overlay setup</h2>
+      <p class="setup-note">Saved in this browser. Press <kbd>F2</kbd> any time to reopen this panel.</p>
+    </header>
+
+    <div class="setup-body">
+      <div class="setup-section">
+        <h3>Twitch</h3>
+        <div class="setup-grid">
+          <label>Channel
+            <input id="cfg-channel" autocomplete="off" placeholder="yourchannel">
+          </label>
+          <label><span>Overlay display name <span class="opt">(optional)</span></span>
+            <input id="cfg-account" autocomplete="off" placeholder="My Stream">
+          </label>
+          <label><span>API Client ID <span class="opt">(optional)</span></span>
+            <input id="cfg-twitch-client-id" autocomplete="off" placeholder="Twitch developer client ID">
+          </label>
+          <label><span>OAuth access token <span class="opt">(optional)</span></span>
+            <input id="cfg-twitch-token" type="password" autocomplete="off" placeholder="OAuth access token">
+          </label>
+          <p class="hint span-2">The client ID and token are only needed for official badge images and follow alerts.</p>
+        </div>
+      </div>
+
+      <div class="setup-section">
+        <h3>Currency</h3>
+        <div class="setup-grid">
+          <label>Name
+            <input id="cfg-currency" autocomplete="off" placeholder="Cookies">
+          </label>
+          <label>Icon
+            <select id="cfg-symbol">
+              <option value="cookie">Cookie</option>
+              <option value="money">Money</option>
+              <option value="box">Box</option>
+              <option value="moon">Moon</option>
+              <option value="fries">Fries</option>
+              <option value="heart">Heart</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="setup-section">
+        <h3>Text-to-speech</h3>
+        <div class="setup-checks" style="margin-bottom:12px">
+          <label class="setup-check"><input id="cfg-tts-enabled" type="checkbox" checked> Enable <code>!tts</code></label>
+        </div>
+        <div class="setup-grid">
+          <label>Browser voice
+            <select id="cfg-browser-voice"><option value="">Automatic (recommended)</option></select>
+          </label>
+          <label>Language
+            <select id="cfg-language"><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option></select>
+          </label>
+          <p class="hint span-2" id="voice-hint"></p>
+        </div>
+        <details id="cfg-tts-advanced">
+          <summary>Use an external TTS service instead (advanced)</summary>
+          <div class="setup-grid">
+            <label class="span-2">API endpoint
+              <input id="cfg-tts-url" autocomplete="off" placeholder="https://your-service.example/speak">
+            </label>
+            <label>Voice ID
+              <input id="cfg-voice" autocomplete="off" placeholder="English voice ID">
+            </label>
+            <label><span>API key <span class="opt">(if required)</span></span>
+              <input id="cfg-api-key" type="password" autocomplete="off" placeholder="API key">
+            </label>
+            <p class="hint span-2">If the service fails, the overlay falls back to the browser voice above.</p>
+          </div>
+        </details>
+        <div class="setup-tts-test">
+          <button id="global-tts-test" type="button">Test TTS</button>
+          <span id="global-setup-tts-status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div class="setup-section">
+        <h3>Overlay</h3>
+        <div class="setup-checks">
+          <label class="setup-check"><input id="cfg-alerts-enabled" type="checkbox" checked> Alerts</label>
+          <label class="setup-check"><input id="cfg-chat-enabled" type="checkbox" checked> Chat</label>
+        </div>
+        <label style="margin-top:14px"><span>Overlay link <span class="opt">(use this as your OBS browser source)</span></span>
+          <input id="cfg-overlay-link" readonly onfocus="this.select()">
+        </label>
+      </div>
     </div>
-    <div class="setup-checks">
-      <label class="setup-check"><input id="cfg-tts-enabled" type="checkbox" checked> Enable TTS</label>
-      <label class="setup-check"><input id="cfg-alerts-enabled" type="checkbox" checked> Enable alerts</label>
-      <label class="setup-check"><input id="cfg-chat-enabled" type="checkbox" checked> Show chat</label>
-    </div>
-    <div class="setup-actions">
-      <button id="global-tts-test" type="button">Test TTS</button>
-      <button id="global-setup-save" type="button">Save setup</button>
+
+    <footer class="setup-footer">
+      <p id="global-setup-status" aria-live="polite"></p>
       <button id="global-setup-cancel" type="button">Close</button>
-    </div>
-    <p id="global-setup-status" aria-live="polite"></p>
+      <button id="global-setup-save" type="button">Save &amp; start</button>
+    </footer>
   </section>
 </div>
 
@@ -346,7 +381,7 @@
 
   const SETTINGS_KEY = "global-overlay-settings-v1";
   const defaultSettings = {
-    channel: "", twitchClientId: "", twitchToken: "", account: "", currency: "Cookies", symbol: "cookie", ttsUrl: "", voice: "", apiKey: "",
+    channel: "", twitchClientId: "", twitchToken: "", account: "", currency: "Cookies", symbol: "cookie", ttsUrl: "", voice: "", apiKey: "", browserVoice: "",
     language: "en-US", tts: true, alerts: true, chat: true, configured: false
   };
   let settings = { ...defaultSettings };
@@ -354,10 +389,11 @@
   if (!["cookie", "money", "box", "moon", "fries", "heart"].includes(settings.symbol)) settings.symbol = "cookie";
   const setupBackdrop = document.getElementById("global-setup-backdrop");
   const setupStatus = document.getElementById("global-setup-status");
+  function setSetupStatus(msg, kind = "") { setupStatus.textContent = msg; setupStatus.className = kind; }
   const setupFields = {
     channel: "cfg-channel", twitchClientId: "cfg-twitch-client-id", twitchToken: "cfg-twitch-token",
     account: "cfg-account", currency: "cfg-currency", symbol: "cfg-symbol",
-    ttsUrl: "cfg-tts-url", voice: "cfg-voice", apiKey: "cfg-api-key", language: "cfg-language"
+    ttsUrl: "cfg-tts-url", voice: "cfg-voice", apiKey: "cfg-api-key", browserVoice: "cfg-browser-voice", language: "cfg-language"
   };
   function fillSetup() {
     for (const [key, id] of Object.entries(setupFields)) {
@@ -369,6 +405,9 @@
     document.getElementById("cfg-tts-enabled").checked = !!settings.tts;
     document.getElementById("cfg-alerts-enabled").checked = !!settings.alerts;
     document.getElementById("cfg-chat-enabled").checked = !!settings.chat;
+    document.getElementById("cfg-overlay-link").value = location.href.split("#")[0] + "#overlay";
+    const adv = document.getElementById("cfg-tts-advanced"); if (adv && settings.ttsUrl) adv.open = true;
+    fillVoiceList();
   }
   function openSetup() {
     fillSetup();
@@ -380,47 +419,51 @@
     setupBackdrop.classList.add("closed");
   }
   fillSetup();
+  function fillVoiceList() {
+    const sel = document.getElementById("cfg-browser-voice");
+    const hint = document.getElementById("voice-hint");
+    if (!sel) return;
+    const voices = ("speechSynthesis" in window) ? speechSynthesis.getVoices().filter(v => /^en([_-]|$)/i.test(v.lang)) : [];
+    const current = sel.value || settings.browserVoice || "";
+    sel.innerHTML = "";
+    const auto = document.createElement("option"); auto.value = ""; auto.textContent = "Automatic (recommended)"; sel.appendChild(auto);
+    voices.forEach(v => { const o = document.createElement("option"); o.value = v.name; o.textContent = `${v.name} (${v.lang})`; sel.appendChild(o); });
+    sel.value = current;
+    if (hint) hint.textContent = voices.length ? "" : "No English browser voices were found here (OBS's built-in browser has none). Use the external TTS service below, or open this page in Chrome/Edge.";
+  }
+  if ("speechSynthesis" in window) speechSynthesis.addEventListener("voiceschanged", fillVoiceList);
+  fillVoiceList();
+
+  const ttsStatus = document.getElementById("global-setup-tts-status");
   let ttsTestRun = 0;
-  document.getElementById("global-tts-test").addEventListener("click", () => {
-    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
-      setupStatus.textContent = "This browser does not support browser TTS.";
-      return;
-    }
-    const run = ++ttsTestRun;
+  document.getElementById("global-tts-test").addEventListener("click", async () => {
     const button = document.getElementById("global-tts-test");
-    button.disabled = true;
-    setupStatus.textContent = "Testing voice...";
-    const startTest = () => {
-      if (run !== ttsTestRun) return;
-      try {
-        const test = new SpeechSynthesisUtterance("TTS is working.");
-        test.lang = document.getElementById("cfg-language").value || "en-US";
-        test.volume = 1;
-        const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => /^en[-_]US$/i.test(v.lang)) || voices.find(v => /^en/i.test(v.lang));
-        if (englishVoice) test.voice = englishVoice;
-        test.onstart = () => { if (run === ttsTestRun) setupStatus.textContent = "Audio started."; };
-        test.onend = () => { if (run === ttsTestRun) { setupStatus.textContent = "Test finished."; button.disabled = false; } };
-        test.onerror = event => {
-          if (run !== ttsTestRun) return;
-          setupStatus.textContent = "TTS failed: " + (event.error || "audio unavailable");
-          button.disabled = false;
-        };
-        window.speechSynthesis.resume();
-        window.speechSynthesis.speak(test);
-      } catch (error) {
-        setupStatus.textContent = "TTS failed: " + (error.message || "audio unavailable");
-        button.disabled = false;
-      }
+    const val = id => document.getElementById(id).value.trim();
+    const cfg = {
+      ...settings, strict: true,
+      ttsUrl: val("cfg-tts-url"), voice: val("cfg-voice"), apiKey: val("cfg-api-key"),
+      language: val("cfg-language") || "en-US", browserVoice: val("cfg-browser-voice")
     };
-    // Chrome can report an utterance as interrupted if cancel() and speak() race.
-    // Let an already-running test finish instead of cancelling it underneath itself.
-    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-      setupStatus.textContent = "Speech is already playing. Wait for it to finish, then test again.";
+    const run = ++ttsTestRun;
+    const say = (msg, kind = "") => { if (run === ttsTestRun) { ttsStatus.textContent = msg; ttsStatus.className = kind; } };
+    button.disabled = true;
+    say("Testing voice…");
+    ttsUnlock();                                   // this click counts as the user gesture the browser requires
+    try {
+      if (!cfg.ttsUrl && "speechSynthesis" in window && (speechSynthesis.speaking || speechSynthesis.pending)) {
+        speechSynthesis.cancel();                  // clears a stuck engine before testing
+        await new Promise(r => setTimeout(r, 200));
+      }
+      await speakText("TTS is working.", cfg);
+      say("Finished. If you heard it, TTS is working.", "ok");
+    } catch (e) {
+      const why = e.code === "not-allowed" ? "the browser blocked audio. Click the page and try again."
+        : e.code === "no-start" ? "the speech engine did not respond. This browser may have no voices."
+        : (e.message || e.code || "audio unavailable");
+      say("TTS failed: " + why, "error");
+    } finally {
       button.disabled = false;
-      return;
     }
-    startTest();
   });
   // Show setup by default. The overlay itself is only shown after saving to #overlay.
   // This prevents a previously saved browser setting from making the page look blank.
@@ -444,15 +487,15 @@
     settings.language = settings.language || "en-US";
     settings.configured = true;
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
-    catch (e) { setupStatus.textContent = "Could not save settings in this browser."; return; }
-    setupStatus.textContent = "Saved. Loading your overlay...";
+    catch (e) { setSetupStatus("Could not save settings in this browser.", "error"); return; }
+    setSetupStatus("Saved. Loading your overlay…", "ok");
     try { sessionStorage.setItem("overlay-setup-saved-hint", "1"); } catch (e) {}
     leaveSetupRoute();
     location.reload();
   });
   document.getElementById("global-setup-cancel").addEventListener("click", () => {
     if (settings.configured) { leaveSetupRoute(); closeSetup(); }
-    else setupStatus.textContent = "Complete setup and save to start the overlay.";
+    else setSetupStatus("Enter your channel and save to start the overlay.");
   });
   const CHANNEL = (settings.channel || params.get("channel") || "").toLowerCase().replace(/^#/, "");
   const CURRENCY_NAME = settings.currency || "Cookies";
@@ -1045,75 +1088,104 @@
     return segs.map(s => s.sfx ? s : { say: s.say.trim() }).filter(s => s.sfx || s.say);
   }
 
-  // Use English voices only. Never inherit the OBS/browser language or choose a non-English voice.
-  function pickVoice(synth) {
-    const voices = synth.getVoices();
-    const en = voices.filter(v => /^en([_-]|$)/i.test(v.lang));
-    if (TTS_VOICE) {
-      const requested = en.find(v => v.name.toLowerCase().includes(TTS_VOICE));
-      if (requested) return requested;
-    }
-    const us = en.filter(v => /^en[-_]US$/i.test(v.lang));
-    const male = /(david|mark|guy|christopher|eric|tony|james|male)/i;
-    return us.find(v => male.test(v.name)) || en.find(v => male.test(v.name)) || us[0] || en[0] || null;
-  }
-  try {
-    if ("speechSynthesis" in window) {
-      speechSynthesis.getVoices();
-      speechSynthesis.addEventListener("voiceschanged", () => speechSynthesis.getVoices());
-    }
-  } catch (e) {}
-
-  let ttsUtter = null, ttsBusy = false;
-  const ttsQueue = [], ttsLastUser = new Map();
-
-  function speakWithBrowser(text, retryInterrupted = true) {
-    return new Promise((resolve, reject) => {
-      if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
-        reject(new Error("Browser speech synthesis is not supported."));
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = settings.language || "en-US";
-      utterance.volume = TTS_VOL;
-      const voice = pickVoice(window.speechSynthesis);
-      if (voice) utterance.voice = voice;
-      let settled = false;
-      utterance.onend = () => { if (!settled) { settled = true; resolve(); } };
-      utterance.onerror = event => {
-        if (settled) return;
-        settled = true;
-        if (event.error === "interrupted" && retryInterrupted) {
-          // Chrome occasionally interrupts the first utterance after the speech engine wakes up.
-          window.setTimeout(() => {
-            window.speechSynthesis.resume();
-            speakWithBrowser(text, false).then(resolve, reject);
-          }, 250);
-        } else {
-          reject(new Error(`Browser TTS failed: ${event.error || "unknown error"}`));
-        }
+  // Browser voices load asynchronously. Wait briefly for them instead of speaking with none.
+  let voicesPromise = null;
+  function voicesReady() {
+    if (!("speechSynthesis" in window)) return Promise.resolve([]);
+    const have = speechSynthesis.getVoices();
+    if (have.length) return Promise.resolve(have);
+    if (!voicesPromise) voicesPromise = new Promise(resolve => {
+      let timer;
+      const finish = () => {
+        clearTimeout(timer);
+        speechSynthesis.removeEventListener("voiceschanged", finish);
+        voicesPromise = null;
+        resolve(speechSynthesis.getVoices());
       };
-      window.speechSynthesis.resume();
-      window.speechSynthesis.speak(utterance);
+      timer = setTimeout(finish, 1500);
+      speechSynthesis.addEventListener("voiceschanged", finish);
     });
+    return voicesPromise;
   }
 
-  async function speakText(text) {
-    if (!TTS_ON || !text) return;
-    // No endpoint is required: use a browser voice with an explicitly selected English locale.
-    if (!settings.ttsUrl) {
-      await speakWithBrowser(text);
-      return;
+  // English voices only. Never inherit the OBS/browser language or choose a non-English voice.
+  function pickVoice(voices, cfg = settings) {
+    const en = voices.filter(v => /^en([_-]|$)/i.test(v.lang));
+    const wanted = [TTS_VOICE, (cfg.browserVoice || "").toLowerCase()].filter(Boolean);
+    for (const w of wanted) {
+      const hit = en.find(v => v.name.toLowerCase() === w) || en.find(v => v.name.toLowerCase().includes(w));
+      if (hit) return hit;
     }
+    const lang = (cfg.language || "en-US").replace("_", "-").toLowerCase();
+    const preferred = en.filter(v => v.lang.replace("_", "-").toLowerCase() === lang);
+    const male = /(david|mark|guy|christopher|eric|tony|james|male)/i;
+    return preferred.find(v => male.test(v.name)) || en.find(v => male.test(v.name)) || preferred[0] || en[0] || null;
+  }
+
+  const ttsQueue = [], ttsLastUser = new Map();
+  let ttsBusy = false, ttsLocked = false;
+  const liveUtterances = new Set();                 // Chrome drops "end" events for utterances that get garbage-collected, so keep a reference
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const ttsError = (message, code) => Object.assign(new Error(message), { code });
+
+  async function speakWithBrowser(text, cfg = settings, attempt = 0) {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+      throw ttsError("This browser does not support speech synthesis.", "unsupported");
+    }
+    const synth = window.speechSynthesis;
+    const voices = await voicesReady();
+    try {
+      await new Promise((resolve, reject) => {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = cfg.language || "en-US";
+        u.volume = TTS_VOL;
+        const voice = pickVoice(voices, cfg);
+        if (voice) { u.voice = voice; u.lang = voice.lang; }
+        let done = false, startTimer, maxTimer;
+        const finish = err => {
+          if (done) return;
+          done = true;
+          clearTimeout(startTimer); clearTimeout(maxTimer);
+          liveUtterances.delete(u);
+          u.onstart = u.onend = u.onerror = null;
+          err ? reject(err) : resolve();
+        };
+        u.onstart = () => clearTimeout(startTimer);
+        u.onend = () => finish();
+        u.onerror = e => finish(ttsError(`Browser TTS failed: ${e.error || "unknown error"}`, e.error));
+        // Watchdogs: a speech engine that never starts or never finishes must not freeze the queue forever.
+        startTimer = setTimeout(() => { synth.cancel(); finish(ttsError("The speech engine did not start.", "no-start")); }, 6000);
+        maxTimer = setTimeout(() => { synth.cancel(); finish(); }, 8000 + text.length * 150);
+        liveUtterances.add(u);
+        synth.resume();
+        synth.speak(u);
+      });
+    } catch (err) {
+      // Chrome sometimes interrupts the first utterance after the engine wakes up; try once more.
+      if (attempt < 1 && (err.code === "interrupted" || err.code === "no-start")) {
+        await wait(250);
+        return speakWithBrowser(text, cfg, attempt + 1);
+      }
+      throw err;
+    }
+  }
+
+  async function speakText(text, cfg = settings) {
+    if (!text) return;
+    // No endpoint needed: use a browser voice with an explicitly selected English locale.
+    if (!cfg.ttsUrl) return speakWithBrowser(text, cfg);
     try {
       const headers = { "Content-Type": "application/json", "Accept": "audio/mpeg, audio/wav, audio/*, application/json" };
-      if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
-      const response = await fetch(settings.ttsUrl, {
-        method: "POST",
-        headers,
-        mode: "cors",
-        body: JSON.stringify({ text, voice: settings.voice, language: settings.language || "en-US", lang: settings.language || "en-US" })
-      });
+      if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+      const ctl = new AbortController();
+      const abort = setTimeout(() => ctl.abort(), 12000);
+      let response;
+      try {
+        response = await fetch(cfg.ttsUrl, {
+          method: "POST", headers, mode: "cors", signal: ctl.signal,
+          body: JSON.stringify({ text, voice: cfg.voice, language: cfg.language || "en-US", lang: cfg.language || "en-US" })
+        });
+      } finally { clearTimeout(abort); }
       if (!response.ok) throw new Error(`TTS service returned HTTP ${response.status}`);
       const type = (response.headers.get("content-type") || "").toLowerCase();
       let audioBlob;
@@ -1139,32 +1211,57 @@
         await new Promise((resolve, reject) => {
           const audio = new Audio(audioUrl);
           audio.volume = TTS_VOL;
-          audio.onended = resolve;
-          audio.onerror = () => reject(new Error("TTS audio could not be played."));
-          audio.play().catch(reject);
+          const cap = setTimeout(() => { audio.pause(); resolve(); }, 30000);   // never hold the queue longer than 30s
+          audio.onended = () => { clearTimeout(cap); resolve(); };
+          audio.onerror = () => { clearTimeout(cap); reject(new Error("TTS audio could not be played.")); };
+          audio.play().catch(e => { clearTimeout(cap); reject(e); });
         });
       } finally {
         URL.revokeObjectURL(audioUrl);
       }
     } catch (error) {
+      if (cfg.strict) throw error;                  // the setup test should show the real problem
       console.warn("Third-party TTS failed; falling back to the browser English voice.", error);
-      await speakWithBrowser(text);
+      await speakWithBrowser(text, cfg);
     }
   }
 
-
   async function runTts() {
-    if (ttsBusy || !ttsQueue.length) return;
+    if (ttsBusy || ttsLocked || !ttsQueue.length) return;
     ttsBusy = true;
     const segs = ttsQueue.shift();
-    try {
-      for (const s of segs) {
+    let blocked = false;
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      try {
         if (s.sfx) await playSfx(s.sfx); else await speakText(s.say);
+      } catch (e) {
+        if (e.code === "not-allowed") {             // browsers block speech until the page has been clicked once
+          blocked = true;
+          ttsQueue.unshift(segs.slice(i));          // keep the unspoken part so nothing is lost
+          break;
+        }
+        console.error("TTS playback failed:", e);   // skip this piece and carry on with the rest
       }
-    } catch (e) { console.error("TTS playback failed:", e); }
+    }
     ttsBusy = false;
+    if (blocked) {
+      ttsLocked = true;
+      setStatus("Click anywhere on this page once to enable text-to-speech");
+      return;
+    }
     setTimeout(runTts, 120);
   }
+
+  // Called on the first click/keypress: lets queued speech start if the browser had blocked it.
+  function ttsUnlock() {
+    if (!ttsLocked) return;
+    ttsLocked = false;
+    setStatus("");
+    runTts();
+  }
+  addEventListener("pointerdown", ttsUnlock);
+  addEventListener("keydown", ttsUnlock);
 
   function handleTts(tags, user, message) {
     if (!TTS_ON) return;
@@ -1539,7 +1636,7 @@
 
   function connectTwitch() {
     if (!CHANNEL) {
-      console.info("Twitch channel is not configured; enter it in #setup.");
+      console.info("Twitch channel is not configured; enter it in the setup panel (F2).");
       return;
     }
     setStatus("connecting to Twitch…");
@@ -1597,7 +1694,7 @@
     if (event.key.toLowerCase() === "e") {
       settings.language = "en-US";
       try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
-      if (setupStatus) setupStatus.textContent = "TTS language set to English (US).";
+      if (setupStatus) setSetupStatus("TTS language set to English (US).", "ok");
       console.info("TTS language set to English (US).");
     } else if (event.key === "F2") {
       event.preventDefault();

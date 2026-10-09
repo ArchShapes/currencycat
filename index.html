@@ -62,6 +62,9 @@
   .chat-badge.leadmod { background: #b45309; }
   .chat-badge.silent { background: #60636b; }
   .chat-badge.custom { background: #6b4db8; }
+  .native-badge { display: inline-block; width: 1.05em; height: 1.05em; vertical-align: -.16em; object-fit: contain; }
+  .yt-badge { width: .98em; height: .98em; display: inline-flex; vertical-align: -.12em; }
+  .yt-badge svg { width: 100%; height: 100%; display: block; }
   .action .text { font-style: italic; }
   .emote { height: 1.5em; vertical-align: middle; margin: -.2em 1px; }
 
@@ -192,10 +195,13 @@
 <div id="global-setup-backdrop" role="dialog" aria-modal="true" aria-labelledby="global-setup-title">
   <section id="global-setup">
     <h2 id="global-setup-title">Overlay setup</h2>
-    <p class="setup-note">Set this up once. Your choices are saved in this browser. Choose Twitch or YouTube. For YouTube, enter the live chat ID and a YouTube Data API key. Press E to force English (US), or F2 to reopen setup. TTS uses the browser English voice by default; a compatible third-party endpoint is optional.</p>
+    <p class="setup-note">Set this up once. Your choices are saved in this browser. Connect Twitch and YouTube at the same time. Enter your Twitch channel and, if you also want YouTube chat, its live chat ID and YouTube Data API key. Press E to force English (US), or F2 to reopen setup. TTS uses the browser English voice by default; a compatible third-party endpoint is optional.</p>
     <div class="setup-grid">
-      <label>Streaming platform
-        <select id="cfg-platform"><option value="twitch">Twitch</option><option value="youtube">YouTube</option></select>
+      <label>Twitch API Client ID (for official badge images)
+        <input id="cfg-twitch-client-id" autocomplete="off" placeholder="Twitch developer client ID">
+      </label>
+      <label>Twitch OAuth access token (for official badge images)
+        <input id="cfg-twitch-token" type="password" autocomplete="off" placeholder="OAuth access token">
       </label>
       <label>Twitch channel / account
         <input id="cfg-channel" autocomplete="off" placeholder="yourchannel">
@@ -246,7 +252,7 @@
   const params = new URLSearchParams(location.search);
   const SETTINGS_KEY = "global-overlay-settings-v1";
   const defaultSettings = {
-    platform: "twitch", channel: "", youtubeChatId: "", youtubeApiKey: "", account: "", currency: "Cookies", symbol: "🍪", ttsUrl: "", voice: "", apiKey: "",
+    channel: "", youtubeChatId: "", youtubeApiKey: "", twitchClientId: "", twitchToken: "", account: "", currency: "Cookies", symbol: "🍪", ttsUrl: "", voice: "", apiKey: "",
     language: "en-US", tts: true, alerts: true, chat: true, configured: false
   };
   let settings = { ...defaultSettings };
@@ -254,18 +260,10 @@
   const setupBackdrop = document.getElementById("global-setup-backdrop");
   const setupStatus = document.getElementById("global-setup-status");
   const setupFields = {
-    platform: "cfg-platform", channel: "cfg-channel", youtubeChatId: "cfg-youtube-chat-id", youtubeApiKey: "cfg-youtube-api-key",
+    channel: "cfg-channel", youtubeChatId: "cfg-youtube-chat-id", youtubeApiKey: "cfg-youtube-api-key", twitchClientId: "cfg-twitch-client-id", twitchToken: "cfg-twitch-token",
     account: "cfg-account", currency: "cfg-currency", symbol: "cfg-symbol",
     ttsUrl: "cfg-tts-url", voice: "cfg-voice", apiKey: "cfg-api-key", language: "cfg-language"
   };
-  const platformField = document.getElementById("cfg-platform");
-  function updatePlatformFields() {
-    const yt = platformField.value === "youtube";
-    document.getElementById("cfg-channel").closest("label").style.opacity = yt ? ".5" : "1";
-    document.getElementById("cfg-youtube-chat-id").closest("label").style.opacity = yt ? "1" : ".5";
-    document.getElementById("cfg-youtube-api-key").closest("label").style.opacity = yt ? "1" : ".5";
-  }
-  platformField.addEventListener("change", updatePlatformFields);
   function fillSetup() {
     for (const [key, id] of Object.entries(setupFields)) document.getElementById(id).value = settings[key] || "";
     document.getElementById("cfg-tts-enabled").checked = !!settings.tts;
@@ -280,7 +278,6 @@
   document.getElementById("global-setup-save").addEventListener("click", () => {
     for (const [key, id] of Object.entries(setupFields)) settings[key] = document.getElementById(id).value.trim();
     settings.channel = settings.channel.replace(/^#/, "").toLowerCase();
-    settings.platform = settings.platform === "youtube" ? "youtube" : "twitch";
     settings.currency = settings.currency || "Cookies";
     settings.symbol = settings.symbol || "";
     settings.tts = document.getElementById("cfg-tts-enabled").checked;
@@ -297,7 +294,6 @@
     if (settings.configured) closeSetup();
     else setupStatus.textContent = "Complete setup and save to start the overlay.";
   });
-  const PLATFORM = settings.platform || "twitch";
   const CHANNEL = (settings.channel || params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
   const CURRENCY_NAME = settings.currency || "Cookies";
   const CURRENCY_SYMBOL = settings.symbol || "";
@@ -319,7 +315,7 @@
   const ALERT_SEC = Math.max(2, parseFloat(params.get("alertsec")) || 6);
   const SFX_VOL = params.has("sfxvol") ? Math.min(1, Math.max(0, parseFloat(params.get("sfxvol")) || 0)) : 0.8;
   const EXTRA_SFX = (params.get("sfx") || "").toLowerCase().split(",").map(s => s.trim().replace(/[^a-z0-9_-]/g, "")).filter(Boolean);
-  const TOKEN = params.get("token") || "", CLIENT_ID = params.get("clientid") || "";
+  const TOKEN = settings.twitchToken || params.get("token") || "", CLIENT_ID = settings.twitchClientId || params.get("clientid") || "";
   const DEMO = params.get("demo") === "1";
   const ALERT_TOP = params.get("alertpos") === "top";
   const TING_ON = params.get("ting") !== "0";
@@ -438,36 +434,84 @@
     saveCookies();
   };
   // mods and the broadcaster have infinite cookies
+  const twitchBadgeImages = new Map();
   const badgeInfo = (tags, user) => {
     const login = (user || "").toLowerCase();
     const raw = (tags.badges || "").split(",").filter(Boolean).map(part => part.split("/")[0]);
     const result = [];
-    const add = (key, label, title) => result.push({ key, label, title });
-    if (raw.includes("broadcaster")) add("broadcaster", "STREAMER", "Channel broadcaster");
-    if (raw.includes("moderator") || tags.mod === "1") add("mod", "MOD", "Moderator");
-    if (LEADMOD_USERS.has(login)) add("leadmod", "LEAD MOD", "Lead moderator");
-    if (raw.includes("vip")) add("vip", "VIP", "VIP");
-    if (raw.includes("founder")) add("founder", "FOUNDER", "Founding subscriber");
-    if (raw.includes("subscriber")) add("sub", "SUB", "Subscriber");
-    if (raw.includes("premium")) add("prime", "PRIME", "Twitch Prime");
-    if (SILENT_USERS.has(login)) add("silent", "SILENT", "Silent user");
+    const add = (key, label, title, set = key, version = "1") => result.push({ key, label, title, set, version });
+    if (raw.includes("broadcaster")) add("broadcaster", "", "Broadcaster", "broadcaster", (tags.badges.match(/(?:^|,)broadcaster\/(\d+)/)||[])[1] || "1");
+    if (raw.includes("moderator") || tags.mod === "1") add("mod", "", "Moderator", "moderator", (tags.badges.match(/(?:^|,)moderator\/(\d+)/)||[])[1] || "1");
+    if (raw.includes("vip")) add("vip", "", "VIP", "vip", (tags.badges.match(/(?:^|,)vip\/(\d+)/)||[])[1] || "1");
+    if (raw.includes("founder")) add("founder", "", "Founding subscriber", "founder", (tags.badges.match(/(?:^|,)founder\/(\d+)/)||[])[1] || "1");
+    if (raw.includes("subscriber")) add("sub", "", "Subscriber", "subscriber", (tags.badges.match(/(?:^|,)subscriber\/(\d+)/)||[])[1] || "0");
+    if (raw.includes("premium")) add("prime", "", "Twitch Prime", "premium", (tags.badges.match(/(?:^|,)premium\/(\d+)/)||[])[1] || "1");
+    if (raw.includes("staff")) add("staff", "", "Twitch Staff", "staff", (tags.badges.match(/(?:^|,)staff\/(\d+)/)||[])[1] || "1");
+    if (LEADMOD_USERS.has(login)) add("leadmod", "LM", "Lead moderator");
+    if (SILENT_USERS.has(login)) add("silent", "S", "Silent user");
     return result;
   };
 
+  function makeYouTubeBadge(kind, title) {
+    const svgs = {
+      owner: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#f4b400" d="M12 2 15 8l7 .9-5 4.8 1.2 7L12 17l-6.2 3.7 1.2-7-5-4.8L9 8z"/></svg>',
+      moderator: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#2ba640" d="M7 3a4 4 0 0 0 5.4 3.8l5.8 5.8-2.8 2.8-5.8-5.8A4 4 0 0 0 5 4l2.5 2.5 2-2zM3 18l3-3 3 3-3 3z"/></svg>',
+      member: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#2ba640" d="M12 2 21 7v10l-9 5-9-5V7z"/><path fill="#fff" d="m12 6 1.7 3.5 3.8.5-2.8 2.7.7 3.8-3.4-1.8-3.4 1.8.7-3.8-2.8-2.7 3.8-.5z"/></svg>',
+      verified: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2 14.5 4l3.2-.1 1.1 3 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1.1 3-3.2-.1L12 22l-2.5-2-3.2.1-1.1-3L2.6 15.2l1-3.1-1-3.1 2.6-1.9 1.1-3 3.2.1z"/><path fill="#606060" d="m10.2 15.8-3-3 1.4-1.4 1.6 1.6 5.2-5.2 1.4 1.4z"/></svg>'
+    };
+    const span = document.createElement("span");
+    span.className = "native-badge yt-badge " + kind;
+    span.title = title;
+    span.innerHTML = svgs[kind] || "";
+    return span;
+  }
+
   const appendBadges = (parent, tags, user) => {
-    const badges = badgeInfo(tags, user);
-    if (!badges.length) return;
     const wrap = document.createElement("span");
     wrap.className = "badges";
+    if (tags.platform === "youtube") {
+      if (tags.ytOwner === "1") wrap.appendChild(makeYouTubeBadge("owner", "Channel owner"));
+      if (tags.ytModerator === "1") wrap.appendChild(makeYouTubeBadge("moderator", "Moderator"));
+      if (tags.ytSponsor === "1") wrap.appendChild(makeYouTubeBadge("member", "Channel member"));
+      if (tags.ytVerified === "1") wrap.appendChild(makeYouTubeBadge("verified", "Verified channel"));
+      if (wrap.childNodes.length) parent.appendChild(wrap);
+      return;
+    }
+    const badges = badgeInfo(tags, user);
     badges.forEach(info => {
       const badge = document.createElement("span");
-      badge.className = "chat-badge " + info.key;
-      badge.textContent = info.label;
-      badge.title = info.title;
+      const image = twitchBadgeImages.get(info.set + "/" + info.version) || twitchBadgeImages.get(info.set + "/1");
+      if (image) {
+        const img = document.createElement("img");
+        img.className = "native-badge twitch-badge";
+        img.src = image; img.alt = ""; img.title = info.title;
+        badge.appendChild(img);
+      } else {
+        badge.className = "chat-badge " + info.key;
+        badge.textContent = info.label || "";
+        badge.title = info.title;
+        if (!info.label) badge.textContent = info.title;
+      }
       wrap.appendChild(badge);
     });
-    parent.appendChild(wrap);
+    if (wrap.childNodes.length) parent.appendChild(wrap);
   };
+
+  async function loadOfficialTwitchBadges() {
+    if (!TOKEN || !CLIENT_ID) return;
+    try {
+      const headers = { "Authorization": "Bearer " + TOKEN.replace(/^oauth:/, ""), "Client-Id": CLIENT_ID };
+      const get = async (url) => { const r = await fetch(url, { headers }); if (!r.ok) throw new Error("Badge API HTTP " + r.status); return r.json(); };
+      const globalData = await get("https://api.twitch.tv/helix/chat/badges/global");
+      for (const set of (globalData.data || [])) for (const v of (set.versions || [])) twitchBadgeImages.set(set.set_id + "/" + v.id, v.image_url_2x || v.image_url_1x);
+      const userData = await get("https://api.twitch.tv/helix/users?login=" + encodeURIComponent(CHANNEL));
+      const broadcasterId = userData.data && userData.data[0] && userData.data[0].id;
+      if (broadcasterId) {
+        const channelData = await get("https://api.twitch.tv/helix/chat/badges?broadcaster_id=" + encodeURIComponent(broadcasterId));
+        for (const set of (channelData.data || [])) for (const v of (set.versions || [])) twitchBadgeImages.set(set.set_id + "/" + v.id, v.image_url_2x || v.image_url_1x);
+      }
+    } catch (e) { console.warn("Could not load official Twitch badge images:", e.message); }
+  }
 
   const isMod = (tags) => tags.mod === "1" || /(^|,)(moderator|broadcaster)\//.test(tags.badges || "");
 
@@ -1327,15 +1371,16 @@
   /* ---------- Chat platform connections ---------- */
   let ws, retry = 0, youtubeNextPageToken = "", youtubePollTimer = null;
   function connect() {
-    if (PLATFORM === "youtube") { connectYouTube(); return; }
     connectTwitch();
+    connectYouTube();
+    loadOfficialTwitchBadges();
   }
 
   function connectYouTube() {
     const liveChatId = (settings.youtubeChatId || "").trim();
     const apiKey = (settings.youtubeApiKey || "").trim();
     if (!liveChatId || !apiKey) {
-      setStatus("YouTube setup needs a live chat ID and API key. Press F2 to configure.");
+      console.info("YouTube chat is not configured; Twitch chat will still run.");
       return;
     }
     setStatus("connecting to YouTube chat…");
@@ -1362,8 +1407,13 @@
           const tags = {
             "display-name": author.displayName || "YouTube viewer",
             color: "",
-            mod: author.isChatModerator ? "1" : "0",
-            "badges": author.isChatOwner ? "broadcaster/1" : (author.isChatModerator ? "moderator/1" : "")
+            platform: "youtube",
+            ytOwner: author.isChatOwner ? "1" : "0",
+            ytModerator: author.isChatModerator ? "1" : "0",
+            ytSponsor: author.isChatSponsor ? "1" : "0",
+            ytVerified: author.isVerified ? "1" : "0",
+            mod: author.isChatModerator || author.isChatOwner ? "1" : "0",
+            "badges": ""
           };
           addMessage(tags, author.displayName || "YouTube viewer", text);
         }
@@ -1427,7 +1477,7 @@
 
   if (settings.configured) {
     connect();
-    if (PLATFORM === "twitch") startFollows();
+    startFollows();
   }
 
   document.addEventListener("keydown", (event) => {

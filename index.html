@@ -281,16 +281,16 @@
     setupBackdrop.classList.add("closed");
   }
   fillSetup();
-  if (!settings.configured || location.hash.toLowerCase() === "#setup") openSetup();
-  else closeSetup();
+  // Show setup by default. The overlay itself is only shown after saving to #overlay.
+  // This prevents a previously saved browser setting from making the page look blank.
+  if (location.hash.toLowerCase() === "#overlay") closeSetup();
+  else openSetup();
   window.addEventListener("hashchange", () => {
-    if (location.hash.toLowerCase() === "#setup") openSetup();
-    else if (settings.configured) closeSetup();
+    if (location.hash.toLowerCase() === "#overlay") closeSetup();
+    else openSetup();
   });
   function leaveSetupRoute() {
-    if (location.hash.toLowerCase() === "#setup") {
-      history.replaceState(null, "", location.pathname + location.search);
-    }
+    history.replaceState(null, "", location.pathname + location.search + "#overlay");
   }
   document.getElementById("global-setup-save").addEventListener("click", () => {
     for (const [key, id] of Object.entries(setupFields)) settings[key] = document.getElementById(id).value.trim();
@@ -309,10 +309,10 @@
     location.reload();
   });
   document.getElementById("global-setup-cancel").addEventListener("click", () => {
-    if (settings.configured) { closeSetup(); leaveSetupRoute(); }
+    if (settings.configured) { leaveSetupRoute(); closeSetup(); }
     else setupStatus.textContent = "Complete setup and save to start the overlay.";
   });
-  const CHANNEL = (settings.channel || params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
+  const CHANNEL = (settings.channel || params.get("channel") || "").toLowerCase().replace(/^#/, "");
   const CURRENCY_NAME = settings.currency || "Cookies";
   const CURRENCY_SYMBOL = settings.symbol || "";
   const DISPLAY_ACCOUNT = settings.account || CHANNEL;
@@ -1448,7 +1448,11 @@
   }
 
   function connectTwitch() {
-    setStatus("connecting…");
+    if (!CHANNEL) {
+      console.info("Twitch channel is not configured; enter it in #setup.");
+      return;
+    }
+    setStatus("connecting to Twitch…");
     ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
 
     ws.onopen = () => {

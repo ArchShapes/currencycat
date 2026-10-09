@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>STREAM</title>
+<title>Stream chat overlay</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   /* URL options:
@@ -192,10 +192,19 @@
 <div id="global-setup-backdrop" role="dialog" aria-modal="true" aria-labelledby="global-setup-title">
   <section id="global-setup">
     <h2 id="global-setup-title">Overlay setup</h2>
-    <p class="setup-note">Set this up once. Your choices are saved in this browser. Press E to force English (US), or F2 to reopen setup. TTS works with the browser English voice by default. Optionally enter a third-party endpoint that accepts POST JSON {text, voice, language} and returns audio or JSON with audioUrl/audioBase64.</p>
+    <p class="setup-note">Set this up once. Your choices are saved in this browser. Choose Twitch or YouTube. For YouTube, enter the live chat ID and a YouTube Data API key. Press E to force English (US), or F2 to reopen setup. TTS uses the browser English voice by default; a compatible third-party endpoint is optional.</p>
     <div class="setup-grid">
-      <label> Twitch channel / account
+      <label>Streaming platform
+        <select id="cfg-platform"><option value="twitch">Twitch</option><option value="youtube">YouTube</option></select>
+      </label>
+      <label>Twitch channel / account
         <input id="cfg-channel" autocomplete="off" placeholder="yourchannel">
+      </label>
+      <label>YouTube live chat ID
+        <input id="cfg-youtube-chat-id" autocomplete="off" placeholder="Live chat ID from YouTube Live Control Room">
+      </label>
+      <label>YouTube Data API key
+        <input id="cfg-youtube-api-key" type="password" autocomplete="off" placeholder="Google Cloud API key">
       </label>
       <label>Overlay display name
         <input id="cfg-account" autocomplete="off" placeholder="My Stream">
@@ -237,7 +246,7 @@
   const params = new URLSearchParams(location.search);
   const SETTINGS_KEY = "global-overlay-settings-v1";
   const defaultSettings = {
-    channel: "", account: "", currency: "Cookies", symbol: "🍪", ttsUrl: "", voice: "", apiKey: "",
+    platform: "twitch", channel: "", youtubeChatId: "", youtubeApiKey: "", account: "", currency: "Cookies", symbol: "🍪", ttsUrl: "", voice: "", apiKey: "",
     language: "en-US", tts: true, alerts: true, chat: true, configured: false
   };
   let settings = { ...defaultSettings };
@@ -245,14 +254,24 @@
   const setupBackdrop = document.getElementById("global-setup-backdrop");
   const setupStatus = document.getElementById("global-setup-status");
   const setupFields = {
-    channel: "cfg-channel", account: "cfg-account", currency: "cfg-currency", symbol: "cfg-symbol",
+    platform: "cfg-platform", channel: "cfg-channel", youtubeChatId: "cfg-youtube-chat-id", youtubeApiKey: "cfg-youtube-api-key",
+    account: "cfg-account", currency: "cfg-currency", symbol: "cfg-symbol",
     ttsUrl: "cfg-tts-url", voice: "cfg-voice", apiKey: "cfg-api-key", language: "cfg-language"
   };
+  const platformField = document.getElementById("cfg-platform");
+  function updatePlatformFields() {
+    const yt = platformField.value === "youtube";
+    document.getElementById("cfg-channel").closest("label").style.opacity = yt ? ".5" : "1";
+    document.getElementById("cfg-youtube-chat-id").closest("label").style.opacity = yt ? "1" : ".5";
+    document.getElementById("cfg-youtube-api-key").closest("label").style.opacity = yt ? "1" : ".5";
+  }
+  platformField.addEventListener("change", updatePlatformFields);
   function fillSetup() {
     for (const [key, id] of Object.entries(setupFields)) document.getElementById(id).value = settings[key] || "";
     document.getElementById("cfg-tts-enabled").checked = !!settings.tts;
     document.getElementById("cfg-alerts-enabled").checked = !!settings.alerts;
     document.getElementById("cfg-chat-enabled").checked = !!settings.chat;
+    updatePlatformFields();
   }
   function openSetup() { fillSetup(); setupBackdrop.classList.add("open"); }
   function closeSetup() { setupBackdrop.classList.remove("open"); }
@@ -261,6 +280,7 @@
   document.getElementById("global-setup-save").addEventListener("click", () => {
     for (const [key, id] of Object.entries(setupFields)) settings[key] = document.getElementById(id).value.trim();
     settings.channel = settings.channel.replace(/^#/, "").toLowerCase();
+    settings.platform = settings.platform === "youtube" ? "youtube" : "twitch";
     settings.currency = settings.currency || "Cookies";
     settings.symbol = settings.symbol || "";
     settings.tts = document.getElementById("cfg-tts-enabled").checked;
@@ -277,6 +297,7 @@
     if (settings.configured) closeSetup();
     else setupStatus.textContent = "Complete setup and save to start the overlay.";
   });
+  const PLATFORM = settings.platform || "twitch";
   const CHANNEL = (settings.channel || params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
   const CURRENCY_NAME = settings.currency || "Cookies";
   const CURRENCY_SYMBOL = settings.symbol || "";
@@ -1303,9 +1324,62 @@
 
   function removeBy(sel) { chat.querySelectorAll(sel).forEach(e => e.remove()); }
 
-  /* ---------- Twitch IRC ---------- */
-  let ws, retry = 0;
+  /* ---------- Chat platform connections ---------- */
+  let ws, retry = 0, youtubeNextPageToken = "", youtubePollTimer = null;
   function connect() {
+    if (PLATFORM === "youtube") { connectYouTube(); return; }
+    connectTwitch();
+  }
+
+  function connectYouTube() {
+    const liveChatId = (settings.youtubeChatId || "").trim();
+    const apiKey = (settings.youtubeApiKey || "").trim();
+    if (!liveChatId || !apiKey) {
+      setStatus("YouTube setup needs a live chat ID and API key. Press F2 to configure.");
+      return;
+    }
+    setStatus("connecting to YouTube chat…");
+    let stopped = false;
+    async function poll() {
+      if (stopped) return;
+      try {
+        const url = new URL("https://www.googleapis.com/youtube/v3/liveChat/messages");
+        url.searchParams.set("liveChatId", liveChatId);
+        url.searchParams.set("part", "snippet,authorDetails");
+        url.searchParams.set("maxResults", "200");
+        url.searchParams.set("key", apiKey);
+        if (youtubeNextPageToken) url.searchParams.set("pageToken", youtubeNextPageToken);
+        const response = await fetch(url.toString());
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error?.message || `YouTube API returned HTTP ${response.status}`);
+        youtubeNextPageToken = data.nextPageToken || youtubeNextPageToken;
+        for (const item of (data.items || [])) {
+          const author = item.authorDetails || {};
+          const snippet = item.snippet || {};
+          if (snippet.type !== "textMessageEvent") continue;
+          const text = snippet.textMessageDetails?.messageText;
+          if (!text) continue;
+          const tags = {
+            "display-name": author.displayName || "YouTube viewer",
+            color: "",
+            mod: author.isChatModerator ? "1" : "0",
+            "badges": author.isChatOwner ? "broadcaster/1" : (author.isChatModerator ? "moderator/1" : "")
+          };
+          addMessage(tags, author.displayName || "YouTube viewer", text);
+        }
+        setStatus("");
+        const interval = Math.max(1000, Number(data.pollingIntervalMillis) || 5000);
+        youtubePollTimer = setTimeout(poll, interval);
+      } catch (err) {
+        setStatus(`YouTube chat error: ${err.message}`);
+        youtubePollTimer = setTimeout(poll, 10000);
+      }
+    }
+    poll();
+    window.addEventListener("beforeunload", () => { stopped = true; clearTimeout(youtubePollTimer); }, { once: true });
+  }
+
+  function connectTwitch() {
     setStatus("connecting…");
     ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
 
@@ -1351,7 +1425,10 @@
     ws.onerror = () => ws.close();
   }
 
-  if (settings.configured) { connect(); startFollows(); }
+  if (settings.configured) {
+    connect();
+    if (PLATFORM === "twitch") startFollows();
+  }
 
   document.addEventListener("keydown", (event) => {
     if (event.repeat || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;

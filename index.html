@@ -26,8 +26,6 @@
      &wheelbias=1.2  wheel odds (higher = rarer big wins; 1.0 pays more than it costs)
      &ting=0         turn the "first message after a quiet minute" ting off
      &tingsec=60     how many quiet seconds before the ting
-     &leadmod=name1,name2  show a LeadMod badge for these logins
-     &silent=name1,name2   show a Silent badge for these logins
      &demo=1         show test buttons                                  */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
@@ -46,22 +44,6 @@
   .msg.out { opacity: 0; }
   .name { font-weight: 700; }
   .name::after { content: ":"; color: #fff; font-weight: 400; margin-right: .35em; }
-  .badges { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 5px; vertical-align: .12em; }
-  .chat-badge {
-    display: inline-block; padding: 1px 5px; border-radius: 3px;
-    font: 700 .62em/1.45 "Segoe UI", system-ui, sans-serif;
-    letter-spacing: .025em; text-shadow: none; vertical-align: middle;
-    color: #fff; background: #53535f;
-  }
-  .chat-badge.broadcaster { background: #9147ff; }
-  .chat-badge.mod { background: #168a48; }
-  .chat-badge.vip { background: #e85d9e; }
-  .chat-badge.founder { background: #a35d27; }
-  .chat-badge.sub { background: #3869c8; }
-  .chat-badge.prime { background: #2865a8; }
-  .chat-badge.leadmod { background: #b45309; }
-  .chat-badge.silent { background: #60636b; }
-  .chat-badge.custom { background: #6b4db8; }
   .action .text { font-style: italic; }
   .emote { height: 1.5em; vertical-align: middle; margin: -.2em 1px; }
 
@@ -160,8 +142,6 @@
 (() => {
   const params  = new URLSearchParams(location.search);
   const CHANNEL = (params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
-  const LEADMOD_USERS = new Set((params.get("leadmod") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
-  const SILENT_USERS = new Set((params.get("silent") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
   const FADE_S  = parseFloat(params.get("fade") ?? "30");
   const MAX_MSG = Math.max(1, parseInt(params.get("max") || "6", 10));
   const MUTE    = params.get("mute") === "1";
@@ -294,37 +274,6 @@
     saveCookies();
   };
   // mods and the broadcaster have infinite cookies
-  const badgeInfo = (tags, user) => {
-    const login = (user || "").toLowerCase();
-    const raw = (tags.badges || "").split(",").filter(Boolean).map(part => part.split("/")[0]);
-    const result = [];
-    const add = (key, label, title) => result.push({ key, label, title });
-    if (raw.includes("broadcaster")) add("broadcaster", "STREAMER", "Channel broadcaster");
-    if (raw.includes("moderator") || tags.mod === "1") add("mod", "MOD", "Moderator");
-    if (LEADMOD_USERS.has(login)) add("leadmod", "LEAD MOD", "Lead moderator");
-    if (raw.includes("vip")) add("vip", "VIP", "VIP");
-    if (raw.includes("founder")) add("founder", "FOUNDER", "Founding subscriber");
-    if (raw.includes("subscriber")) add("sub", "SUB", "Subscriber");
-    if (raw.includes("premium")) add("prime", "PRIME", "Twitch Prime");
-    if (SILENT_USERS.has(login)) add("silent", "SILENT", "Silent user");
-    return result;
-  };
-
-  const appendBadges = (parent, tags, user) => {
-    const badges = badgeInfo(tags, user);
-    if (!badges.length) return;
-    const wrap = document.createElement("span");
-    wrap.className = "badges";
-    badges.forEach(info => {
-      const badge = document.createElement("span");
-      badge.className = "chat-badge " + info.key;
-      badge.textContent = info.label;
-      badge.title = info.title;
-      wrap.appendChild(badge);
-    });
-    parent.appendChild(wrap);
-  };
-
   const isMod = (tags) => tags.mod === "1" || /(^|,)(moderator|broadcaster)\//.test(tags.badges || "");
 
   /* ---------- Cookie cards ---------- */
@@ -1118,7 +1067,6 @@
     t.className = "text";
     t.appendChild(buildText(message, tags.emotes));
 
-    appendBadges(el, tags, user);
     el.append(n, t);
     push(el, tags);
   }

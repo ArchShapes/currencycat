@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>bogdanthegdplayer chat</title>
+<title>Stream chat overlay</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   /* URL options:
@@ -149,30 +149,152 @@
     from { opacity: 0; transform: translateX(-16px) scale(.96); }
     to   { opacity: 1; transform: none; }
   }
+
+  #global-setup-backdrop {
+    position: fixed; inset: 0; z-index: 100000; display: none;
+    align-items: center; justify-content: center; padding: 18px;
+    box-sizing: border-box; background: rgba(0,0,0,.72);
+    color: #202124; font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+    text-shadow: none;
+  }
+  #global-setup-backdrop.open { display: flex; }
+  #global-setup {
+    width: min(520px, 100%); max-height: 92vh; overflow: auto;
+    box-sizing: border-box; padding: 22px; background: #fff;
+    border: 1px solid #dedede; border-radius: 12px;
+    box-shadow: 0 18px 60px rgba(0,0,0,.35);
+  }
+  #global-setup h2 { margin: 0 0 5px; font-size: 21px; }
+  #global-setup .setup-note { margin: 0 0 16px; color: #626262; }
+  #global-setup .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  #global-setup label { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  #global-setup input, #global-setup select {
+    box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 10px;
+    border: 1px solid #cfcfcf; border-radius: 6px; background: #fff;
+    color: #222; font: inherit;
+  }
+  #global-setup .setup-checks { display: flex; flex-wrap: wrap; gap: 18px; margin: 15px 0; }
+  #global-setup .setup-check { display: flex; flex-direction: row; align-items: center; gap: 7px; }
+  #global-setup .setup-check input { width: auto; }
+  #global-setup .setup-actions { display: flex; gap: 8px; margin-top: 16px; }
+  #global-setup button { border: 0; border-radius: 6px; padding: 10px 13px; cursor: pointer; font: inherit; }
+  #global-setup-save { flex: 1; background: #222; color: #fff; }
+  #global-setup-cancel { background: #eee; color: #222; }
+  #global-setup-status { min-height: 1.3em; margin: 10px 0 0; color: #555; }
+  @media (max-width: 480px) { #global-setup .setup-grid { grid-template-columns: 1fr; } }
+
 </style>
 </head>
 <body>
 <div id="chat"></div>
 <div id="alerts"></div>
 <div id="status"></div>
+<div id="global-setup-backdrop" role="dialog" aria-modal="true" aria-labelledby="global-setup-title">
+  <section id="global-setup">
+    <h2 id="global-setup-title">Overlay setup</h2>
+    <p class="setup-note">Set this up once. Your choices are saved in this browser. Press E to force English (US), or F2 to reopen setup. TTS works with the browser English voice by default. Optionally enter a third-party endpoint that accepts POST JSON {text, voice, language} and returns audio or JSON with audioUrl/audioBase64.</p>
+    <div class="setup-grid">
+      <label> Twitch channel / account
+        <input id="cfg-channel" autocomplete="off" placeholder="yourchannel">
+      </label>
+      <label>Overlay display name
+        <input id="cfg-account" autocomplete="off" placeholder="My Stream">
+      </label>
+      <label>Currency name
+        <input id="cfg-currency" autocomplete="off" placeholder="Cookies">
+      </label>
+      <label>Currency symbol / emoji
+        <input id="cfg-symbol" autocomplete="off" placeholder="🍪">
+      </label>
+      <label>Third-party TTS API endpoint
+        <input id="cfg-tts-url" autocomplete="off" placeholder="https://your-service.example/speak">
+      </label>
+      <label>Voice ID
+        <input id="cfg-voice" autocomplete="off" placeholder="English voice ID">
+      </label>
+      <label>API key (if required)
+        <input id="cfg-api-key" type="password" autocomplete="off" placeholder="API key">
+      </label>
+      <label>Default language
+        <select id="cfg-language"><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option></select>
+      </label>
+    </div>
+    <div class="setup-checks">
+      <label class="setup-check"><input id="cfg-tts-enabled" type="checkbox" checked> Enable TTS</label>
+      <label class="setup-check"><input id="cfg-alerts-enabled" type="checkbox" checked> Enable alerts</label>
+      <label class="setup-check"><input id="cfg-chat-enabled" type="checkbox" checked> Show chat</label>
+    </div>
+    <div class="setup-actions">
+      <button id="global-setup-save" type="button">Save setup</button>
+      <button id="global-setup-cancel" type="button">Cancel</button>
+    </div>
+    <p id="global-setup-status" aria-live="polite"></p>
+  </section>
+</div>
 
 <script>
 (() => {
-  const params  = new URLSearchParams(location.search);
-  const CHANNEL = (params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
+  const params = new URLSearchParams(location.search);
+  const SETTINGS_KEY = "global-overlay-settings-v1";
+  const defaultSettings = {
+    channel: "", account: "", currency: "Cookies", symbol: "🍪", ttsUrl: "", voice: "", apiKey: "",
+    language: "en-US", tts: true, alerts: true, chat: true, configured: false
+  };
+  let settings = { ...defaultSettings };
+  try { settings = { ...defaultSettings, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch (e) {}
+  const setupBackdrop = document.getElementById("global-setup-backdrop");
+  const setupStatus = document.getElementById("global-setup-status");
+  const setupFields = {
+    channel: "cfg-channel", account: "cfg-account", currency: "cfg-currency", symbol: "cfg-symbol",
+    ttsUrl: "cfg-tts-url", voice: "cfg-voice", apiKey: "cfg-api-key", language: "cfg-language"
+  };
+  function fillSetup() {
+    for (const [key, id] of Object.entries(setupFields)) document.getElementById(id).value = settings[key] || "";
+    document.getElementById("cfg-tts-enabled").checked = !!settings.tts;
+    document.getElementById("cfg-alerts-enabled").checked = !!settings.alerts;
+    document.getElementById("cfg-chat-enabled").checked = !!settings.chat;
+  }
+  function openSetup() { fillSetup(); setupBackdrop.classList.add("open"); }
+  function closeSetup() { setupBackdrop.classList.remove("open"); }
+  fillSetup();
+  if (!settings.configured) openSetup();
+  document.getElementById("global-setup-save").addEventListener("click", () => {
+    for (const [key, id] of Object.entries(setupFields)) settings[key] = document.getElementById(id).value.trim();
+    settings.channel = settings.channel.replace(/^#/, "").toLowerCase();
+    settings.currency = settings.currency || "Cookies";
+    settings.symbol = settings.symbol || "";
+    settings.tts = document.getElementById("cfg-tts-enabled").checked;
+    settings.alerts = document.getElementById("cfg-alerts-enabled").checked;
+    settings.chat = document.getElementById("cfg-chat-enabled").checked;
+    settings.language = settings.language || "en-US";
+    settings.configured = true;
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+    catch (e) { setupStatus.textContent = "Could not save settings in this browser."; return; }
+    setupStatus.textContent = "Saved. Loading your overlay...";
+    location.reload();
+  });
+  document.getElementById("global-setup-cancel").addEventListener("click", () => {
+    if (settings.configured) closeSetup();
+    else setupStatus.textContent = "Complete setup and save to start the overlay.";
+  });
+  const CHANNEL = (settings.channel || params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");
+  const CURRENCY_NAME = settings.currency || "Cookies";
+  const CURRENCY_SYMBOL = settings.symbol || "";
+  const DISPLAY_ACCOUNT = settings.account || CHANNEL;
+  document.title = `${DISPLAY_ACCOUNT} chat overlay`;
   const LEADMOD_USERS = new Set((params.get("leadmod") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
   const SILENT_USERS = new Set((params.get("silent") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
   const FADE_S  = parseFloat(params.get("fade") ?? "30");
   const MAX_MSG = Math.max(1, parseInt(params.get("max") || "6", 10));
   const MUTE    = params.get("mute") === "1";
   const SPAM_ON = params.get("spam") !== "0";
-  const TTS_ON  = params.get("tts") !== "0";
+  const TTS_ON = settings.tts && params.get("tts") !== "0";
   const TTS_VOL = params.has("ttsvol") ? Math.min(1, Math.max(0, parseFloat(params.get("ttsvol")) || 0)) : 1;
   const TTS_VOICE = (params.get("ttsvoice") || "").toLowerCase();
   const DROP = (params.has("drop") ? Math.min(100, Math.max(0, parseFloat(params.get("drop")) || 0)) : 35) / 100;
   const EXTRA_BLOCK = (params.get("block") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean);
   const TTS_COST = 10, TTS_MAX_CHARS = 150, TTS_QUEUE_MAX = 5, TTS_USER_CD = 10000;
-  const ALERTS_ON = params.get("alerts") !== "0";
+  const ALERTS_ON = settings.alerts && params.get("alerts") !== "0";
   const ALERT_SEC = Math.max(2, parseFloat(params.get("alertsec")) || 6);
   const SFX_VOL = params.has("sfxvol") ? Math.min(1, Math.max(0, parseFloat(params.get("sfxvol")) || 0)) : 0.8;
   const EXTRA_SFX = (params.get("sfx") || "").toLowerCase().split(",").map(s => s.trim().replace(/[^a-z0-9_-]/g, "")).filter(Boolean);
@@ -187,6 +309,7 @@
   if (params.get("bg"))   document.body.classList.add("bg");
 
   const chat = document.getElementById("chat");
+  if (!settings.chat) chat.style.display = "none";
   const statusEl = document.getElementById("status");
   const setStatus = (t) => { statusEl.textContent = t; statusEl.classList.toggle("show", !!t); };
 
@@ -344,19 +467,19 @@
     who.style.color = readable(tags.color, name);
     const head = document.createElement("div");
     head.className = "chead";
-    if (short) head.append(who, document.createTextNode(` has ${have}, needs ${cost} cookies for ${what}! 🍪`));
+    if (short) head.append(who, document.createTextNode(` has ${have}, needs ${cost} ${CURRENCY_NAME} for ${what}! ${CURRENCY_SYMBOL}`));
     else head.append(document.createTextNode("🍪 "), who);
     el.append(head);
 
     if (!short) {
       const big = document.createElement("div");
       big.className = "cbig";
-      big.textContent = mod ? "∞ cookies" : `${have} ${have === 1 ? "cookie" : "cookies"}`;
+      big.textContent = mod ? `∞ ${CURRENCY_NAME}` : `${have} ${CURRENCY_NAME}`;
       el.append(big);
     }
     if (mod && !short) {
       const hint = document.createElement("div");
-      hint.className = "chint"; hint.textContent = "Mods have unlimited cookies";
+      hint.className = "chint"; hint.textContent = `Mods have unlimited ${CURRENCY_NAME}`;
       el.append(hint);
     }
     push(el, {}, 8);
@@ -730,32 +853,77 @@
   let ttsUtter = null, ttsBusy = false;
   const ttsQueue = [], ttsLastUser = new Map();
 
-  function speakText(text) {
-    return new Promise(resolve => {
-      const synth = window.speechSynthesis;
-      if (!synth) return resolve();
-      const u = new SpeechSynthesisUtterance(text);
-      // Explicit locale keeps pronunciation English even when OBS/browser UI is set to another language.
-      u.volume = TTS_VOL;
-      u.lang = "en-US";
-      const v = pickVoice(synth);
-      if (v) {
-        u.voice = v;
-        u.lang = /^en[-_]US$/i.test(v.lang) ? "en-US" : "en";
+  function speakWithBrowser(text) {
+    return new Promise((resolve, reject) => {
+      if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+        reject(new Error("Browser speech synthesis is not supported."));
+        return;
       }
-      let done = false, guard = null;
-      const finish = () => { if (done) return; done = true; clearTimeout(guard); resolve(); };
-      guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} finish(); }, 20000);
-      u.onend = finish; u.onerror = finish;
-      ttsUtter = u;                                         // keep a reference so it isn't garbage-collected mid-speech
-      synth.speak(u);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = settings.language || "en-US";
+      utterance.volume = TTS_VOL;
+      const voice = pickVoice(window.speechSynthesis);
+      if (voice) utterance.voice = voice;
+      utterance.onend = resolve;
+      utterance.onerror = event => reject(new Error(`Browser TTS failed: ${event.error || "unknown error"}`));
+      window.speechSynthesis.speak(utterance);
     });
   }
 
-  // browsers need one click before speech/sound works; OBS browser sources don't
-  addEventListener("pointerdown", () => {
-    try { speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch (e) {}
-  }, { once: true });
+  async function speakText(text) {
+    if (!TTS_ON || !text) return;
+    // No endpoint is required: use a browser voice with an explicitly selected English locale.
+    if (!settings.ttsUrl) {
+      await speakWithBrowser(text);
+      return;
+    }
+    try {
+      const headers = { "Content-Type": "application/json", "Accept": "audio/mpeg, audio/wav, audio/*, application/json" };
+      if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`;
+      const response = await fetch(settings.ttsUrl, {
+        method: "POST",
+        headers,
+        mode: "cors",
+        body: JSON.stringify({ text, voice: settings.voice, language: settings.language || "en-US", lang: settings.language || "en-US" })
+      });
+      if (!response.ok) throw new Error(`TTS service returned HTTP ${response.status}`);
+      const type = (response.headers.get("content-type") || "").toLowerCase();
+      let audioBlob;
+      if (type.includes("application/json")) {
+        const data = await response.json();
+        if (data.audioUrl || data.audio_url || data.url) {
+          const audioResponse = await fetch(data.audioUrl || data.audio_url || data.url);
+          if (!audioResponse.ok) throw new Error("Could not load audio from the TTS service.");
+          audioBlob = await audioResponse.blob();
+        } else if (data.audioBase64 || data.audio_base64) {
+          const raw = atob(data.audioBase64 || data.audio_base64);
+          const bytes = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+          audioBlob = new Blob([bytes], { type: data.mimeType || data.mime_type || "audio/mpeg" });
+        } else {
+          throw new Error("TTS JSON must contain audioUrl or audioBase64.");
+        }
+      } else {
+        audioBlob = await response.blob();
+      }
+      const audioUrl = URL.createObjectURL(audioBlob);
+      try {
+        await new Promise((resolve, reject) => {
+          const audio = new Audio(audioUrl);
+          audio.volume = TTS_VOL;
+          audio.onended = resolve;
+          audio.onerror = () => reject(new Error("TTS audio could not be played."));
+          audio.play().catch(reject);
+        });
+      } finally {
+        URL.revokeObjectURL(audioUrl);
+      }
+    } catch (error) {
+      console.warn("Third-party TTS failed; falling back to the browser English voice.", error);
+      await speakWithBrowser(text);
+    }
+  }
+
 
   async function runTts() {
     if (ttsBusy || !ttsQueue.length) return;
@@ -860,7 +1028,7 @@
     const tick = setInterval(() => { card.as.textContent = `🎡 ${1 + Math.floor(Math.random() * 20)}`; }, 90);
     setTimeout(() => {
       clearInterval(tick);
-      card.at.textContent = `${name} won ${win} ${win === 1 ? "cookie" : "cookies"}! 🍪`;
+      card.at.textContent = `${name} won ${win} ${CURRENCY_NAME}! ${CURRENCY_SYMBOL}`;
       card.as.textContent = mod ? "" : `${net >= 0 ? "+" : ""}${net} after the 5 cookie spin`;
       if (!MUTE) chime(win >= 15 ? [880, 1108.7, 1318.5, 1760, 2217] : win >= 8 ? [783.99, 987.77, 1174.66] : [659.25, 783.99]);
     }, 2200);
@@ -934,7 +1102,7 @@
     const key = user.toLowerCase();
     giftWindows.set(key, [...limitInfo.entries, { time: Date.now(), amount: n }]);
     markCd("gift:" + user);
-    queueAlert("cookie", `${nameOf(tags, user)} gifted ${n} ${n === 1 ? "cookie" : "cookies"} to ${m[1]}!`, "");
+    queueAlert("cookie", `${nameOf(tags, user)} gifted ${n} ${CURRENCY_NAME} to ${m[1]}! ${CURRENCY_SYMBOL}`, "");
   }
 
   // mods/broadcaster only, completely silent: !givecookies @name 20  (negative numbers take cookies away)
@@ -1077,9 +1245,9 @@
     el.className = "msg cheer";
     const who = document.createElement("span"); who.className = "who"; who.textContent = name;
     who.style.color = readable(tags.color, name);
-    const amt = document.createElement("span"); amt.className = "amt"; amt.textContent = amount.toLocaleString("en-US");
+    const amt = document.createElement("span"); amt.className = "amt"; amt.textContent = `${CURRENCY_SYMBOL} ${amount.toLocaleString("en-US")}`.trim();
     el.append(who, document.createTextNode(" cheered "), amt,
-      document.createTextNode(` cookies. Shared across ${pool.length} ${pool.length === 1 ? "viewer" : "viewers"}!`));
+      document.createTextNode(` ${CURRENCY_NAME}. Shared across ${pool.length} ${pool.length === 1 ? "viewer" : "viewers"}!`));
     push(el, tags);
     playCheer(amount);
   }
@@ -1183,8 +1351,21 @@
     ws.onerror = () => ws.close();
   }
 
-  connect();
-  startFollows();
+  if (settings.configured) { connect(); startFollows(); }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.repeat || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
+    if (event.key.toLowerCase() === "e") {
+      settings.language = "en-US";
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+      if (setupStatus) setupStatus.textContent = "TTS language set to English (US).";
+      console.info("TTS language set to English (US).");
+    } else if (event.key === "F2") {
+      event.preventDefault();
+      openSetup();
+    }
+  });
+
 })();
 </script>
 </body>

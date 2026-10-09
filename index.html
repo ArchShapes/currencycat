@@ -12,7 +12,12 @@
      &size=20        font size in px
      &bg=1           dark background (for testing in a browser)
      &mute=1         turn the cheer sound off
-     &spam=0         turn the spam filter off                         */
+     &spam=0         turn the spam filter off
+     &tts=0          turn !tts off
+     &ttsvol=1       TTS volume 0-1
+     &ttsvoice=name  pick a voice (part of its name, e.g. "zira")
+     &drop=35        % chance a message earns 1 cookie
+     &block=a,b      extra words blocked from TTS                      */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
   #chat {
@@ -44,6 +49,17 @@
   .cheer .who { font-weight: 700; }
   .cheer .amt { font-weight: 800; color: #aee6ff; }
 
+  /* Small notices (cookie balance etc.) */
+  .msg.note { font-size: .85em; opacity: .9; }
+
+  /* TTS line */
+  .msg.tts {
+    margin: 4px 0; padding: 6px 12px;
+    border-left: 3px solid #ffc46b; border-radius: 6px;
+    background: linear-gradient(90deg, rgba(255,196,107,.2), rgba(255,196,107,0) 85%);
+  }
+  .tts .spk { margin-right: .35em; }
+
   #status {
     position: absolute; top: 8px; right: 12px; font: 12px system-ui, sans-serif;
     color: #9aa; opacity: 0; transition: opacity .4s; text-shadow: none;
@@ -68,6 +84,12 @@
   const MAX_MSG = Math.max(1, parseInt(params.get("max") || "6", 10));
   const MUTE    = params.get("mute") === "1";
   const SPAM_ON = params.get("spam") !== "0";
+  const TTS_ON  = params.get("tts") !== "0";
+  const TTS_VOL = params.has("ttsvol") ? Math.min(1, Math.max(0, parseFloat(params.get("ttsvol")) || 0)) : 1;
+  const TTS_VOICE = (params.get("ttsvoice") || "").toLowerCase();
+  const DROP = (params.has("drop") ? Math.min(100, Math.max(0, parseFloat(params.get("drop")) || 0)) : 35) / 100;
+  const EXTRA_BLOCK = (params.get("block") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean);
+  const TTS_COST = 10, TTS_MAX_CHARS = 150, TTS_QUEUE_MAX = 5, TTS_USER_CD = 10000;
   if (params.get("size")) document.getElementById("chat").style.setProperty("--size", params.get("size") + "px");
   if (params.get("bg"))   document.body.classList.add("bg");
 
@@ -171,6 +193,147 @@
     });
   }
 
+  /* ---------- Cookies ---------- */
+  const STORE_KEY = "cookies:" + CHANNEL;
+  let cookies = {};
+  try { cookies = JSON.parse(localStorage.getItem(STORE_KEY) || "{}") || {}; } catch (e) { cookies = {}; }
+  const saveCookies = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(cookies)); } catch (e) {} };
+  const bal = (u) => cookies[u.toLowerCase()] || 0;
+  const addCookies = (u, n) => {
+    const k = u.toLowerCase();
+    cookies[k] = Math.max(0, (cookies[k] || 0) + n);
+    saveCookies();
+  };
+  // mods and the broadcaster have infinite cookies
+  const isMod = (tags) => tags.mod === "1" || /(^|,)(moderator|broadcaster)\//.test(tags.badges || "");
+
+  /* ---------- Small on-screen notes ---------- */
+  const noteLast = new Map();
+  function addNote(tags, user, rest) {
+    const now = Date.now();
+    if (now - (noteLast.get(user) || 0) < 5000) return;     // don't let one person flood notes
+    noteLast.set(user, now);
+    const name = tags["display-name"] || user;
+    const el = document.createElement("div");
+    el.className = "msg note";
+    const who = document.createElement("span");
+    who.className = "who"; who.style.fontWeight = "700";
+    who.textContent = name;
+    who.style.color = readable(tags.color, name);
+    el.append(who, document.createTextNode(rest));
+    push(el, {}, 7);
+  }
+
+  function showBalance(tags, user) {
+    addNote(tags, user, isMod(tags) ? " has ∞ 🍪" : ` has ${bal(user)} 🍪`);
+  }
+
+  /* ---------- Cheer helper ---------- */
+  const cheerLast = new Map();
+  function tryCheer(tags, user, amountStr) {
+    const amount = parseInt(amountStr.replace(/,/g, ""), 10);
+    const now = Date.now();
+    if (!(amount > 0) || now - (cheerLast.get(user) || 0) < 1500) return;
+    cheerLast.set(user, now);
+    addCheer(tags, user, amount);
+  }
+  const CMD_CHEER = /^!cheer\s+(\d{1,3}(?:,\d{3})+|\d{1,9})\s*$/i;
+
+  /* ---------- TTS ---------- */
+  const BLOCK = ["nigg", "fagg", "retard", "killyourself", ...EXTRA_BLOCK];
+  function ttsBlocked(t) {
+    const flat = t.toLowerCase()
+      .replace(/[0]/g, "o").replace(/[@4]/g, "a").replace(/[1!|]/g, "i").replace(/\$/g, "s").replace(/3/g, "e")
+      .replace(/[^a-z ]/g, "");
+    const tight = flat.replace(/\s+/g, "");
+    return BLOCK.some(w => flat.includes(w) || tight.includes(w)) || /\bkys\b/.test(flat);
+  }
+
+  function stripEmotes(message, emoteTag) {
+    if (!emoteTag) return message;
+    const chars = Array.from(message);
+    emoteTag.split("/").forEach(e => {
+      (e.split(":")[1] || "").split(",").forEach(r => {
+        const [s, en] = r.split("-").map(Number);
+        if (!isNaN(s) && !isNaN(en)) for (let i = s; i <= en && i < chars.length; i++) chars[i] = "";
+      });
+    });
+    return chars.join("");
+  }
+
+  function cleanTts(t) {
+    return t.replace(/https?:\/\/\S+|www\.\S+/gi, "")
+            .replace(/@\w+/g, "")
+            .replace(/(.)\1{4,}/gu, "$1$1$1")
+            .replace(/\s+/g, " ").trim()
+            .slice(0, TTS_MAX_CHARS);
+  }
+
+  const ttsQueue = [], ttsLastUser = new Map();
+  let ttsBusy = false, ttsUtter = null;
+
+  // browsers need one click before speech works; OBS browser sources don't
+  addEventListener("pointerdown", () => {
+    try { speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch (e) {}
+  }, { once: true });
+
+  function runTts() {
+    if (ttsBusy || !ttsQueue.length) return;
+    const synth = window.speechSynthesis;
+    if (!synth) { ttsQueue.length = 0; return; }
+    ttsBusy = true;
+    const u = new SpeechSynthesisUtterance(ttsQueue.shift());
+    u.volume = TTS_VOL;
+    if (TTS_VOICE) {
+      const v = synth.getVoices().find(v => v.name.toLowerCase().includes(TTS_VOICE));
+      if (v) u.voice = v;
+    }
+    let done = false, guard = null;
+    const finish = () => {
+      if (done) return;
+      done = true; clearTimeout(guard); ttsBusy = false;
+      setTimeout(runTts, 700);
+    };
+    guard = setTimeout(() => { try { synth.cancel(); } catch (e) {} finish(); }, 20000);
+    u.onend = finish; u.onerror = finish;
+    ttsUtter = u;                                           // keep a reference so it isn't garbage-collected mid-speech
+    synth.speak(u);
+  }
+
+  function handleTts(tags, user, message) {
+    if (!TTS_ON) return;
+    const text = cleanTts(stripEmotes(message, tags.emotes).replace(/^!tts\s*/i, ""));
+    if (!text) return;
+
+    const mod = isMod(tags);
+    const have = bal(user);
+    if (!mod && have < TTS_COST) {
+      addNote(tags, user, ` has ${have}, needs ${TTS_COST} cookies for TTS! 🍪`);
+      return;
+    }
+    if (ttsBlocked(text)) return;                           // blocked text is never charged
+    if (ttsQueue.length >= TTS_QUEUE_MAX) return;           // queue full, not charged
+    const now = Date.now();
+    if (!mod) {
+      if (now - (ttsLastUser.get(user) || 0) < TTS_USER_CD) return;
+      addCookies(user, -TTS_COST);
+      ttsLastUser.set(user, now);
+    }
+
+    const name = tags["display-name"] || user;
+    const el = document.createElement("div");
+    el.className = "msg tts";
+    const spk = document.createElement("span"); spk.className = "spk"; spk.textContent = "🔊";
+    const n = document.createElement("span"); n.className = "name"; n.textContent = name;
+    n.style.color = readable(tags.color, name);
+    const t = document.createElement("span"); t.className = "text"; t.textContent = text;
+    el.append(spk, n, t);
+    push(el, tags);
+
+    ttsQueue.push(text);
+    runTts();
+  }
+
   /* ---------- Rendering ---------- */
   function readable(hex, name) {
     if (!/^#[0-9a-f]{6}$/i.test(hex || "")) {
@@ -218,12 +381,12 @@
     return frag;
   }
 
-  function push(el, tags) {
+  function push(el, tags, fade = FADE_S) {
     if (tags.id) el.dataset.id = tags.id;
     chat.appendChild(el);
     while (chat.children.length > MAX_MSG) chat.removeChild(chat.firstChild);
-    if (FADE_S > 0) {
-      setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 700); }, FADE_S * 1000);
+    if (fade > 0) {
+      setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 700); }, fade * 1000);
     }
   }
 
@@ -253,19 +416,18 @@
     const m = message.match(/^\x01ACTION (.*)\x01$/);
     if (m) { isAction = true; message = m[1]; }
 
-    // triangle cheer (checked before the spam filter, with its own light rate limit)
-    const c = !isAction && message.match(CHEER_RE);
-    if (c) {
-      const amount = parseInt(c[1].replace(/,/g, ""), 10);
-      const prev = lastByUser.get(user + ":cheer") || 0;
-      if (amount > 0 && Date.now() - prev > 1500) {
-        lastByUser.set(user + ":cheer", Date.now());
-        addCheer(tags, user, amount);
-      }
-      return;
+    // commands and cheers (checked before the spam filter, which drops other "!" messages)
+    if (!isAction) {
+      const c = message.match(CHEER_RE) || message.match(CMD_CHEER);   // "▲ 100", "△100", "!cheer 100"
+      if (c) { tryCheer(tags, user, c[1]); return; }
+      if (/^!tts(\s|$)/i.test(message)) { handleTts(tags, user, message); return; }
+      if (/^!cookies?\s*$/i.test(message)) { showBalance(tags, user); return; }
     }
 
     if (isSpam(user, tags, message)) return;
+
+    // only messages that pass the spam filter can earn a cookie (mods don't need them)
+    if (!isMod(tags) && Math.random() < DROP) addCookies(user, 1);
 
     const name = tags["display-name"] || user;
     const el = document.createElement("div");

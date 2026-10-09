@@ -274,7 +274,16 @@
   function openSetup() { fillSetup(); setupBackdrop.classList.add("open"); }
   function closeSetup() { setupBackdrop.classList.remove("open"); }
   fillSetup();
-  if (!settings.configured) openSetup();
+  if (!settings.configured || location.hash.toLowerCase() === "#setup") openSetup();
+  window.addEventListener("hashchange", () => {
+    if (location.hash.toLowerCase() === "#setup") openSetup();
+    else if (settings.configured) closeSetup();
+  });
+  function leaveSetupRoute() {
+    if (location.hash.toLowerCase() === "#setup") {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  }
   document.getElementById("global-setup-save").addEventListener("click", () => {
     for (const [key, id] of Object.entries(setupFields)) settings[key] = document.getElementById(id).value.trim();
     settings.channel = settings.channel.replace(/^#/, "").toLowerCase();
@@ -288,10 +297,11 @@
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
     catch (e) { setupStatus.textContent = "Could not save settings in this browser."; return; }
     setupStatus.textContent = "Saved. Loading your overlay...";
+    leaveSetupRoute();
     location.reload();
   });
   document.getElementById("global-setup-cancel").addEventListener("click", () => {
-    if (settings.configured) closeSetup();
+    if (settings.configured) { closeSetup(); leaveSetupRoute(); }
     else setupStatus.textContent = "Complete setup and save to start the overlay.";
   });
   const CHANNEL = (settings.channel || params.get("channel") || "bogdanthegdplayer").toLowerCase().replace(/^#/, "");

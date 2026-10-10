@@ -28,7 +28,9 @@
      &tingsec=60     how many quiet seconds before the ting
      &leadmod=name1,name2  show a LeadMod badge for these logins
      &silent=name1,name2   show a Silent badge for these logins
-     &demo=1         show test buttons                                  */
+     &demo=1         show test buttons
+     Commands:  !<currency> (e.g. !cookies)  !cheer <n>  !tts <text>  !<sfxname> (e.g. !meow)
+                !mutesfx / !unmutesfx  (streamer + lead mods only; lead mods are set in the setup panel or with &leadmod=)  */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
   #chat {
@@ -185,7 +187,7 @@
   #global-setup .setup-note { margin: 0; color: #a5a5ad; font-size: 13px; line-height: 1.5; }
   #global-setup kbd { padding: 1px 5px; border: 1px solid #3f3f46; border-bottom-width: 2px; border-radius: 4px; background: #202024; font: 11px ui-monospace, Consolas, monospace; color: #d6d6dc; }
 
-  .setup-body { padding: 4px 24px; overflow-y: auto; flex: 1 1 auto; }
+  .setup-body { padding: 4px 24px; overflow-y: hidden; flex: 1 1 auto; }
   .setup-section { padding: 16px 0; border-bottom: 1px solid #26262a; }
   .setup-section:last-child { border-bottom: 0; }
   .setup-section h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #9a9aa4; }
@@ -283,13 +285,6 @@
           <label><span>Overlay display name <span class="opt">(optional)</span></span>
             <input id="cfg-account" autocomplete="off" placeholder="My Stream">
           </label>
-          <label><span>API Client ID <span class="opt">(optional)</span></span>
-            <input id="cfg-twitch-client-id" autocomplete="off" placeholder="Twitch developer client ID">
-          </label>
-          <label><span>OAuth access token <span class="opt">(optional)</span></span>
-            <input id="cfg-twitch-token" type="password" autocomplete="off" placeholder="OAuth access token">
-          </label>
-          <p class="hint span-2">The client ID and token are only needed for official badge images and follow alerts.</p>
         </div>
       </div>
 
@@ -309,6 +304,7 @@
               <option value="heart">Heart</option>
             </select>
           </label>
+          <p class="hint span-2" id="currency-cmd-hint"></p>
         </div>
       </div>
 
@@ -317,30 +313,7 @@
         <div class="setup-checks" style="margin-bottom:12px">
           <label class="setup-check"><input id="cfg-tts-enabled" type="checkbox" checked> Enable <code>!tts</code></label>
         </div>
-        <div class="setup-grid">
-          <label>Browser voice
-            <select id="cfg-browser-voice"><option value="">Automatic (recommended)</option></select>
-          </label>
-          <label>Language
-            <select id="cfg-language"><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option></select>
-          </label>
-          <p class="hint span-2" id="voice-hint"></p>
-        </div>
-        <details id="cfg-tts-advanced">
-          <summary>Use an external TTS service instead (advanced)</summary>
-          <div class="setup-grid">
-            <label class="span-2">API endpoint
-              <input id="cfg-tts-url" autocomplete="off" placeholder="https://your-service.example/speak">
-            </label>
-            <label>Voice ID
-              <input id="cfg-voice" autocomplete="off" placeholder="English voice ID">
-            </label>
-            <label><span>API key <span class="opt">(if required)</span></span>
-              <input id="cfg-api-key" type="password" autocomplete="off" placeholder="API key">
-            </label>
-            <p class="hint span-2">If the service fails, the overlay falls back to the browser voice above.</p>
-          </div>
-        </details>
+        <p class="hint">Voice: Matthew (male, English US) via Puter.js.</p>
         <div class="setup-tts-test">
           <button id="global-tts-test" type="button">Test TTS</button>
           <span id="global-setup-tts-status" aria-live="polite"></span>
@@ -353,6 +326,10 @@
           <label class="setup-check"><input id="cfg-alerts-enabled" type="checkbox" checked> Alerts</label>
           <label class="setup-check"><input id="cfg-chat-enabled" type="checkbox" checked> Chat</label>
         </div>
+        <label style="margin-top:14px"><span>Lead moderators <span class="opt">(logins, comma separated)</span></span>
+          <input id="cfg-leadmods" autocomplete="off" placeholder="mod1, mod2">
+          <span class="hint">Lead mods and the streamer can use !mutesfx and !unmutesfx to silence every sound effect instantly.</span>
+        </label>
         <label style="margin-top:14px"><span>Overlay link <span class="opt">(use this as your OBS browser source)</span></span>
           <input id="cfg-overlay-link" readonly onfocus="this.select()">
         </label>
@@ -367,6 +344,7 @@
   </section>
 </div>
 
+<script src="https://js.puter.com/v2/"></script>
 <script>
 (() => {
   const params = new URLSearchParams(location.search);
@@ -379,9 +357,16 @@
   }
   function appendCurrencyIcon(parent, className = "currency-icon") { parent.appendChild(makeIcon(settings.symbol || "cookie", className)); }
 
+  // "Gold Coins" -> "goldcoins": the currency name decides the balance command (!goldcoins / !goldcoin)
+  const currencySlug = (name) => (String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "")) || "cookies";
+  const currencyCmds = (name) => {
+    const slug = currencySlug(name), one = slug.replace(/s$/, "") || slug;
+    return [...new Set([slug, one, one + "s"])].sort((a, b) => b.length - a.length);
+  };
+
   const SETTINGS_KEY = "global-overlay-settings-v1";
   const defaultSettings = {
-    channel: "", twitchClientId: "", twitchToken: "", account: "", currency: "Cookies", symbol: "cookie", ttsUrl: "", voice: "", apiKey: "", browserVoice: "",
+    channel: "", twitchClientId: "", twitchToken: "", account: "", currency: "Cookies", symbol: "cookie", ttsUrl: "", voice: "", apiKey: "", browserVoice: "", ttsEngine: "online", onlineVoice: "Matthew", leadMods: "",
     language: "en-US", tts: true, alerts: true, chat: true, configured: false
   };
   let settings = { ...defaultSettings };
@@ -391,9 +376,7 @@
   const setupStatus = document.getElementById("global-setup-status");
   function setSetupStatus(msg, kind = "") { setupStatus.textContent = msg; setupStatus.className = kind; }
   const setupFields = {
-    channel: "cfg-channel", twitchClientId: "cfg-twitch-client-id", twitchToken: "cfg-twitch-token",
-    account: "cfg-account", currency: "cfg-currency", symbol: "cfg-symbol",
-    ttsUrl: "cfg-tts-url", voice: "cfg-voice", apiKey: "cfg-api-key", browserVoice: "cfg-browser-voice", language: "cfg-language"
+    channel: "cfg-channel", account: "cfg-account", currency: "cfg-currency", symbol: "cfg-symbol", leadMods: "cfg-leadmods"
   };
   function fillSetup() {
     for (const [key, id] of Object.entries(setupFields)) {
@@ -407,7 +390,7 @@
     document.getElementById("cfg-chat-enabled").checked = !!settings.chat;
     document.getElementById("cfg-overlay-link").value = location.href.split("#")[0] + "#overlay";
     const adv = document.getElementById("cfg-tts-advanced"); if (adv && settings.ttsUrl) adv.open = true;
-    fillVoiceList();
+    updateCurrencyHint();
   }
   function openSetup() {
     fillSetup();
@@ -419,31 +402,23 @@
     setupBackdrop.classList.add("closed");
   }
   fillSetup();
-  function fillVoiceList() {
-    const sel = document.getElementById("cfg-browser-voice");
-    const hint = document.getElementById("voice-hint");
-    if (!sel) return;
-    const voices = ("speechSynthesis" in window) ? speechSynthesis.getVoices().filter(v => /^en([_-]|$)/i.test(v.lang)) : [];
-    const current = sel.value || settings.browserVoice || "";
-    sel.innerHTML = "";
-    const auto = document.createElement("option"); auto.value = ""; auto.textContent = "Automatic (recommended)"; sel.appendChild(auto);
-    voices.forEach(v => { const o = document.createElement("option"); o.value = v.name; o.textContent = `${v.name} (${v.lang})`; sel.appendChild(o); });
-    sel.value = current;
-    if (hint) hint.textContent = voices.length ? "" : "No English browser voices were found here (OBS's built-in browser has none). Use the external TTS service below, or open this page in Chrome/Edge.";
+  function updateCurrencyHint() {
+    const hint = document.getElementById("currency-cmd-hint");
+    const input = document.getElementById("cfg-currency");
+    if (!hint || !input) return;
+    const name = input.value.trim() || "Cookies", slug = currencySlug(name);
+    const others = currencyCmds(name).filter(c => c !== slug).map(c => "!" + c);
+    hint.textContent = `Viewers check their balance with !${slug}${others.length ? " (also " + others.join(", ") + ")" : ""}.`;
   }
-  if ("speechSynthesis" in window) speechSynthesis.addEventListener("voiceschanged", fillVoiceList);
-  fillVoiceList();
+  document.getElementById("cfg-currency").addEventListener("input", updateCurrencyHint);
+
 
   const ttsStatus = document.getElementById("global-setup-tts-status");
   let ttsTestRun = 0;
   document.getElementById("global-tts-test").addEventListener("click", async () => {
     const button = document.getElementById("global-tts-test");
     const val = id => document.getElementById(id).value.trim();
-    const cfg = {
-      ...settings, strict: true,
-      ttsUrl: val("cfg-tts-url"), voice: val("cfg-voice"), apiKey: val("cfg-api-key"),
-      language: val("cfg-language") || "en-US", browserVoice: val("cfg-browser-voice")
-    };
+    const cfg = { ...settings, strict: true, ttsUrl: "", ttsEngine: "online", onlineVoice: "Matthew" };
     const run = ++ttsTestRun;
     const say = (msg, kind = "") => { if (run === ttsTestRun) { ttsStatus.textContent = msg; ttsStatus.className = kind; } };
     button.disabled = true;
@@ -459,6 +434,7 @@
     } catch (e) {
       const why = e.code === "not-allowed" ? "the browser blocked audio. Click the page and try again."
         : e.code === "no-start" ? "the speech engine did not respond. This browser may have no voices."
+        : (e.code === "audio-error" || e.code === "online-failed") ? (e.message || "could not reach the online voice. Check your internet connection.")
         : (e.message || e.code || "audio unavailable");
       say("TTS failed: " + why, "error");
     } finally {
@@ -499,9 +475,10 @@
   });
   const CHANNEL = (settings.channel || params.get("channel") || "").toLowerCase().replace(/^#/, "");
   const CURRENCY_NAME = settings.currency || "Cookies";
+  const CUR_CMDS = currencyCmds(CURRENCY_NAME);          // e.g. ["cookies", "cookie"]
   const DISPLAY_ACCOUNT = settings.account || CHANNEL;
   document.title = `${DISPLAY_ACCOUNT} chat overlay`;
-  const LEADMOD_USERS = new Set((params.get("leadmod") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
+  const LEADMOD_USERS = new Set(((params.get("leadmod") || "") + "," + (settings.leadMods || "")).toLowerCase().split(",").map(s => s.trim().replace(/^@/, "")).filter(Boolean));
   const SILENT_USERS = new Set((params.get("silent") || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean));
   const FADE_S  = parseFloat(params.get("fade") ?? "30");
   const MAX_MSG = Math.max(1, parseInt(params.get("max") || "6", 10));
@@ -596,11 +573,25 @@
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
     return ctx;
   }
+  // Every built-in sound goes through one bus so "!mutesfx" can silence them instantly.
+  let sfxMuted = false, sfxBus = null;
+  const sfxStops = new Set();
+  function sfxOut(c) {
+    if (!sfxBus || sfxBus.context !== c) { sfxBus = c.createGain(); sfxBus.connect(c.destination); }
+    return sfxBus;
+  }
+  function stopAllSfx() {
+    [...sfxStops].forEach(stop => { try { stop(); } catch (e) {} });
+    sfxStops.clear();
+    if (sfxBus) { try { sfxBus.disconnect(); } catch (e) {} sfxBus = null; }
+  }
+  function setSfxMuted(v) { sfxMuted = !!v; if (sfxMuted) stopAllSfx(); }
+
   // browsers need one click before sound; OBS browser sources don't
   addEventListener("pointerdown", audio, { once: true });
 
   function playCheer(amount) {
-    if (MUTE) return;
+    if (MUTE || sfxMuted) return;
     const now = Date.now();
     if (now - lastSound < 600) return;       // don't stack sounds
     lastSound = now;
@@ -611,7 +602,7 @@
     master.gain.value = 0.22;
 
     const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
-    master.connect(lp); lp.connect(c.destination);
+    master.connect(lp); lp.connect(sfxOut(c));
 
     // rising pentatonic arpeggio (E5 → G#5 → B5 → E6); bigger cheers add a top note
     const notes = [659.25, 830.61, 987.77, 1318.51];
@@ -642,63 +633,143 @@
     cookies[k] = Math.max(0, (cookies[k] || 0) + n);
     saveCookies();
   };
-  // mods and the broadcaster have infinite cookies
-  const twitchBadgeImages = new Map();
+  /* ---------- Twitch badges: the real images, no API key ---------- */
+  // Badge art comes from Twitch's public badge feeds; the channel id comes from the chat messages themselves.
+  const BADGE_TITLES = {
+    broadcaster: "Broadcaster", moderator: "Moderator", vip: "VIP", founder: "Founder", subscriber: "Subscriber",
+    premium: "Prime Gaming", staff: "Twitch Staff", admin: "Twitch Admin", global_mod: "Global Moderator",
+    turbo: "Turbo", partner: "Verified", "sub-gifter": "Sub Gifter", "sub-gift-leader": "Gift Leader",
+    bits: "Cheer", "bits-leader": "Bits Leader", "hype-train": "Hype Train", predictions: "Predictions"
+  };
+  const BADGE_CSS = { moderator: "mod", subscriber: "sub", premium: "prime" };
+  const CORE_BADGES = new Set(["broadcaster", "moderator", "vip", "founder", "subscriber", "premium", "staff", "admin", "global_mod", "turbo", "partner"]);
+  // Last-resort art for the common global badges (used only if the badge feeds can't be reached)
+  const BADGE_BUILTIN = {
+    broadcaster: "5527c58c-fb7d-422d-b71b-f309dcb85cc1", moderator: "3267646d-33f0-4b17-b3df-f923a41db1d0",
+    vip: "b817aba4-fad8-49e2-b88a-7cc744dfa6ec", premium: "bbbe0db0-a598-423e-86d0-f9fb98ca1933",
+    staff: "d97c37bd-a6f5-4c38-8f57-4e4bef88af34", admin: "9ef7e029-4cdf-4d4f-b4ed-11b98a8a7d76",
+    global_mod: "9384c43e-4ce7-4e94-b2a1-b93656896eba", turbo: "bd444ec6-8f34-4bf9-91f4-af1e3428d80f",
+    partner: "d12a2e27-16f6-41d0-ab77-b780518f00a3", founder: "511b78a9-ab37-472f-9569-457753bbe7d3"
+  };
+  const prettySet = (set) => set.replace(/[-_]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  const badgeSets = new Map();                 // set -> Map(version -> { url, title })
+  const pendingBadges = [];                    // badge elements waiting for art to load
+  let channelBadgesDone = false, badgesTimedOut = false, globalBadgesStarted = false, channelBadgesStarted = false;
+
+  function addBadgeVersion(set, version, url, title) {
+    if (!set || !url) return;
+    if (!badgeSets.has(set)) badgeSets.set(set, new Map());
+    badgeSets.get(set).set(String(version), { url, title: title || BADGE_TITLES[set] || prettySet(set) });
+  }
+  function ingestBadges(data) {
+    let n = 0;
+    if (!data) return n;
+    if (data.badge_sets) {                       // badges.twitch.tv format
+      for (const [set, o] of Object.entries(data.badge_sets))
+        for (const [ver, v] of Object.entries(o.versions || {})) { addBadgeVersion(set, ver, v.image_url_2x || v.image_url_1x, v.title); n++; }
+    } else {                                     // list format { setID / set_id, versions: [{ id, ... }] }
+      for (const sset of (Array.isArray(data) ? data : (data.data || data.badges || []))) {
+        const set = sset.setID || sset.set_id;
+        for (const v of (sset.versions || [])) { addBadgeVersion(set, v.id, v.image_url_2x || v.image_url_1x, v.title); n++; }
+      }
+    }
+    return n;
+  }
+  async function fetchJson(url, ms = 7000) {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+    try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
+    finally { clearTimeout(t); }
+  }
+  async function loadFirst(urls) {
+    for (const url of urls) {
+      try { if (ingestBadges(await fetchJson(url))) return true; }
+      catch (e) { console.warn("Badge source failed:", url, e.message); }
+    }
+    return false;
+  }
+  function loadOfficialTwitchBadges() {
+    if (globalBadgesStarted) return;
+    globalBadgesStarted = true;
+    loadFirst(["https://badges.twitch.tv/v1/badges/global/display", "https://api.ivr.fi/v2/twitch/badges/global"]).then(refreshBadges);
+    setTimeout(() => { badgesTimedOut = true; refreshBadges(); }, 9000);
+  }
+  function loadChannelBadges(roomId) {
+    if (channelBadgesStarted || !roomId) return;
+    channelBadgesStarted = true;
+    loadFirst([`https://badges.twitch.tv/v1/badges/channels/${encodeURIComponent(roomId)}/display`,
+               `https://api.ivr.fi/v2/twitch/badges/channel?login=${encodeURIComponent(CHANNEL)}`])
+      .finally(() => { channelBadgesDone = true; refreshBadges(); });
+  }
+
+  // finds the picture for "set/version"; subscriber tiers fall back to the closest lower tier
+  function findBadge(set, version) {
+    const versions = badgeSets.get(set);
+    if (versions) {
+      if (versions.has(version)) return versions.get(version);
+      const want = parseInt(version, 10);
+      if (!isNaN(want)) {
+        let best = null, bestN = -1;
+        for (const [k, v] of versions) { const n = parseInt(k, 10); if (!isNaN(n) && n <= want && n > bestN) { best = v; bestN = n; } }
+        if (best) return best;
+      }
+      if (versions.has("1")) return versions.get("1");
+    }
+    return BADGE_BUILTIN[set] ? { url: `https://static-cdn.jtvnw.net/badges/v1/${BADGE_BUILTIN[set]}/2`, title: BADGE_TITLES[set] } : null;
+  }
+
   const badgeInfo = (tags, user) => {
     const login = (user || "").toLowerCase();
-    const raw = (tags.badges || "").split(",").filter(Boolean).map(part => part.split("/")[0]);
-    const result = [];
-    const add = (key, label, title, set = key, version = "1") => result.push({ key, label, title, set, version });
-    if (raw.includes("broadcaster")) add("broadcaster", "", "Broadcaster", "broadcaster", (tags.badges.match(/(?:^|,)broadcaster\/(\d+)/)||[])[1] || "1");
-    if (raw.includes("moderator") || tags.mod === "1") add("mod", "", "Moderator", "moderator", (tags.badges.match(/(?:^|,)moderator\/(\d+)/)||[])[1] || "1");
-    if (raw.includes("vip")) add("vip", "", "VIP", "vip", (tags.badges.match(/(?:^|,)vip\/(\d+)/)||[])[1] || "1");
-    if (raw.includes("founder")) add("founder", "", "Founding subscriber", "founder", (tags.badges.match(/(?:^|,)founder\/(\d+)/)||[])[1] || "1");
-    if (raw.includes("subscriber")) add("sub", "", "Subscriber", "subscriber", (tags.badges.match(/(?:^|,)subscriber\/(\d+)/)||[])[1] || "0");
-    if (raw.includes("premium")) add("prime", "", "Twitch Prime", "premium", (tags.badges.match(/(?:^|,)premium\/(\d+)/)||[])[1] || "1");
-    if (raw.includes("staff")) add("staff", "", "Twitch Staff", "staff", (tags.badges.match(/(?:^|,)staff\/(\d+)/)||[])[1] || "1");
-    if (LEADMOD_USERS.has(login)) add("leadmod", "LM", "Lead moderator");
-    if (SILENT_USERS.has(login)) add("silent", "S", "Silent user");
+    const result = [], seen = new Set();
+    (tags.badges || "").split(",").filter(Boolean).forEach(part => {
+      const [set, version = "1"] = part.split("/");
+      if (!set || seen.has(set)) return;
+      seen.add(set);
+      result.push({ key: BADGE_CSS[set] || set, set, version, title: BADGE_TITLES[set] || prettySet(set) });
+    });
+    if (tags.mod === "1" && !seen.has("moderator")) result.unshift({ key: "mod", set: "moderator", version: "1", title: "Moderator" });
+    if (LEADMOD_USERS.has(login)) result.push({ custom: true, key: "leadmod", label: "LM", title: "Lead moderator" });
+    if (SILENT_USERS.has(login)) result.push({ custom: true, key: "silent", label: "S", title: "Silent user" });
     return result;
   };
+
+  function textBadge(span, info) {
+    span.className = "chat-badge " + info.key;
+    span.textContent = info.label || info.title;
+    span.title = info.title;
+    span.style.display = "";
+  }
+  // returns true when the badge is final (picture or text), false while it's still waiting for the art
+  function fillBadge(span, info) {
+    span.textContent = ""; span.className = ""; span.style.display = "";
+    if (info.custom) { textBadge(span, info); return true; }
+    const found = findBadge(info.set, info.version);
+    if (found) {
+      const img = document.createElement("img");
+      img.className = "native-badge twitch-badge";
+      img.alt = ""; img.title = found.title || info.title; img.src = found.url;
+      img.onerror = () => { span.textContent = ""; if (CORE_BADGES.has(info.set)) textBadge(span, info); else span.style.display = "none"; };
+      span.appendChild(img);
+      return true;
+    }
+    if (!channelBadgesDone && !badgesTimedOut) { span.style.display = "none"; return false; }   // art still loading: stay invisible
+    if (CORE_BADGES.has(info.set)) textBadge(span, info); else span.style.display = "none";
+    return true;
+  }
+  function refreshBadges() {
+    for (let i = pendingBadges.length - 1; i >= 0; i--) if (fillBadge(pendingBadges[i].span, pendingBadges[i].info)) pendingBadges.splice(i, 1);
+  }
 
   const appendBadges = (parent, tags, user) => {
     const wrap = document.createElement("span");
     wrap.className = "badges";
-    const badges = badgeInfo(tags, user);
-    badges.forEach(info => {
-      const badge = document.createElement("span");
-      const image = twitchBadgeImages.get(info.set + "/" + info.version) || twitchBadgeImages.get(info.set + "/1");
-      if (image) {
-        const img = document.createElement("img");
-        img.className = "native-badge twitch-badge";
-        img.src = image; img.alt = ""; img.title = info.title;
-        badge.appendChild(img);
-      } else {
-        badge.className = "chat-badge " + info.key;
-        badge.textContent = info.label || "";
-        badge.title = info.title;
-        if (!info.label) badge.textContent = info.title;
-      }
-      wrap.appendChild(badge);
+    badgeInfo(tags, user).forEach(info => {
+      const span = document.createElement("span");
+      if (!fillBadge(span, info)) pendingBadges.push({ span, info });
+      wrap.appendChild(span);
     });
     if (wrap.childNodes.length) parent.appendChild(wrap);
   };
-
-  async function loadOfficialTwitchBadges() {
-    if (!TOKEN || !CLIENT_ID) return;
-    try {
-      const headers = { "Authorization": "Bearer " + TOKEN.replace(/^oauth:/, ""), "Client-Id": CLIENT_ID };
-      const get = async (url) => { const r = await fetch(url, { headers }); if (!r.ok) throw new Error("Badge API HTTP " + r.status); return r.json(); };
-      const globalData = await get("https://api.twitch.tv/helix/chat/badges/global");
-      for (const set of (globalData.data || [])) for (const v of (set.versions || [])) twitchBadgeImages.set(set.set_id + "/" + v.id, v.image_url_2x || v.image_url_1x);
-      const userData = await get("https://api.twitch.tv/helix/users?login=" + encodeURIComponent(CHANNEL));
-      const broadcasterId = userData.data && userData.data[0] && userData.data[0].id;
-      if (broadcasterId) {
-        const channelData = await get("https://api.twitch.tv/helix/chat/badges?broadcaster_id=" + encodeURIComponent(broadcasterId));
-        for (const set of (channelData.data || [])) for (const v of (set.versions || [])) twitchBadgeImages.set(set.set_id + "/" + v.id, v.image_url_2x || v.image_url_1x);
-      }
-    } catch (e) { console.warn("Could not load official Twitch badge images:", e.message); }
-  }
 
   const isMod = (tags) => tags.mod === "1" || /(^|,)(moderator|broadcaster)\//.test(tags.badges || "");
 
@@ -723,7 +794,7 @@
       head.append(who, document.createTextNode(` has ${have}, needs ${cost} ${CURRENCY_NAME} for ${what} `));
       appendCurrencyIcon(head, "currency-icon inline-currency");
     } else {
-      appendCurrencyIcon(head, "currency-icon"); head.append(document.createTextNode(" "), who);
+      head.append(who);
     }
     el.append(head);
 
@@ -774,12 +845,12 @@
   };
 
   function chime(notes, step = 0.09, vol = 0.2) {
-    if (MUTE) return;
+    if (MUTE || sfxMuted) return;
     const c = audio(); if (!c || c.state !== "running") return;
     const t0 = c.currentTime + 0.02;
     const master = c.createGain(); master.gain.value = vol;
     const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
-    master.connect(lp); lp.connect(c.destination);
+    master.connect(lp); lp.connect(sfxOut(c));
     notes.forEach((f, i) => {
       const t = t0 + i * step;
       [[f, 1], [f * 2, 0.25]].forEach(([freq, v]) => {
@@ -796,7 +867,7 @@
 
   // soft water-drop plink for !hydrate
   function waterDrop() {
-    if (MUTE) return;
+    if (MUTE || sfxMuted) return;
     const c = audio(); if (!c || c.state !== "running") return;
     const t0 = c.currentTime + 0.02;
     [[0, 1300, 520], [0.26, 1000, 430], [0.5, 1500, 600]].forEach(([off, f1, f2]) => {
@@ -807,7 +878,7 @@
       g.gain.setValueAtTime(0.0001, t0 + off);
       g.gain.exponentialRampToValueAtTime(0.22, t0 + off + 0.012);
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.35);
-      o.connect(g); g.connect(c.destination);
+      o.connect(g); g.connect(sfxOut(c));
       o.start(t0 + off); o.stop(t0 + off + 0.4);
     });
   }
@@ -1021,18 +1092,20 @@
   // plays <name>.mp3 from this folder; if it's missing, uses the built-in sound (if there is one)
   function playSfx(name) {
     return new Promise(resolve => {
-      let finished = false, started = false, fell = false;
-      const done = () => { if (!finished) { finished = true; resolve(); } };
-      if (SFX_VOL === 0) return done();
+      if (SFX_VOL === 0 || sfxMuted) return resolve();
+      let finished = false, started = false, fell = false, a = null;
+      const done = () => { if (!finished) { finished = true; sfxStops.delete(stop); resolve(); } };
+      const stop = () => { try { if (a) a.pause(); } catch (e) {} done(); };
+      sfxStops.add(stop);
       const synth = () => {
+        if (finished) return;
         const fn = SYNTH[name], c = audio();
         if (!fn || !c || c.state !== "running") return done();
-        const out = c.createGain(); out.gain.value = 0.6 * SFX_VOL; out.connect(c.destination);
+        const out = c.createGain(); out.gain.value = 0.6 * SFX_VOL; out.connect(sfxOut(c));
         const dur = fn(c, out, c.currentTime + 0.02);
         setTimeout(done, dur * 1000 + 100);
       };
       const fallback = () => { if (fell) return; fell = true; started ? done() : synth(); };
-      let a;
       try { a = new Audio(name + ".mp3"); } catch (e) { return synth(); }
       a.volume = SFX_VOL;
       a.onended = done;
@@ -1040,6 +1113,46 @@
       a.play().then(() => { started = true; }).catch(fallback);
       setTimeout(() => { try { a.pause(); } catch (e) {} done(); }, 5000);   // never longer than 5s
     });
+  }
+
+  // !<sfxname> plays that sound; !mutesfx / !unmutesfx are for the streamer and lead mods only
+  const SFX_CMD_COST = 0, SFX_CMD_CD = 8000;      // set SFX_CMD_COST above 0 to charge currency per sound
+  const sfxCmdLast = new Map();
+  let sfxGlobalLast = 0;
+  function canControlSfx(tags, user) {
+    const login = (user || "").toLowerCase();
+    return /(^|,)broadcaster\//.test(tags.badges || "") || login === CHANNEL || LEADMOD_USERS.has(login);
+  }
+  function sfxNotice(text, tags = {}, user = "") {
+    const el = document.createElement("div");
+    el.className = "msg tts";
+    const spk = document.createElement("span"); spk.className = "spk"; spk.appendChild(makeIcon("volume", "ui-icon"));
+    el.append(spk);
+    if (user) {
+      const n = document.createElement("span"); n.className = "name"; n.textContent = tags["display-name"] || user;
+      n.style.color = readable(tags.color, tags["display-name"] || user);
+      el.append(n);
+    }
+    const t = document.createElement("span"); t.className = "text"; t.textContent = text;
+    el.append(t);
+    push(el, {});
+  }
+  function doSfxCmd(tags, user, name) {
+    if (sfxMuted || MUTE || SFX_VOL === 0) return;
+    const now = Date.now(), mod = isMod(tags);
+    if (now - sfxGlobalLast < 1200) return;                                   // no pile-ups
+    if (!mod && now - (sfxCmdLast.get(user) || 0) < SFX_CMD_CD) return;       // per-user cooldown
+    if (SFX_CMD_COST > 0) { if (!canPay(tags, user, SFX_CMD_COST, "a sound effect")) return; pay(tags, user, SFX_CMD_COST); }
+    sfxGlobalLast = now; sfxCmdLast.set(user, now);
+    audio();
+    playSfx(name);
+    sfxNotice(`played ${name}`, tags, user);
+  }
+  function doMuteSfx(tags, user, mute) {
+    if (!canControlSfx(tags, user)) return;
+    if (sfxMuted === mute) return;
+    setSfxMuted(mute);
+    sfxNotice(mute ? "Sound effects muted. Everything stopped." : "Sound effects are back on.", tags, user);
   }
 
   /* ---------- TTS ---------- */
@@ -1170,60 +1283,112 @@
     }
   }
 
+  // Plays an audio URL. Rejects with code "not-allowed" when the browser wants a click first.
+  function playAudioUrl(url) {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.preload = "auto";
+      audio.volume = TTS_VOL;
+      let done = false, startTimer, capTimer;
+      const finish = err => {
+        if (done) return;
+        done = true;
+        clearTimeout(startTimer); clearTimeout(capTimer);
+        audio.onplaying = audio.onended = audio.onerror = null;
+        try { audio.pause(); } catch (e) {}
+        err ? reject(err) : resolve();
+      };
+      audio.onplaying = () => clearTimeout(startTimer);
+      audio.onended = () => finish();
+      audio.onerror = () => finish(ttsError("The voice audio could not be loaded.", "audio-error"));
+      startTimer = setTimeout(() => finish(ttsError("The voice audio did not start.", "audio-error")), 10000);
+      capTimer = setTimeout(() => finish(), 40000);          // never hold the queue longer than 40s
+      audio.src = url;
+      const p = audio.play();
+      if (p && p.catch) p.catch(e => finish(e && e.name === "NotAllowedError"
+        ? ttsError("Audio is blocked until the page is clicked.", "not-allowed")
+        : ttsError((e && e.message) || "Audio could not play.", "audio-error")));
+    });
+  }
+
+  // Male English voice through Puter.js (AWS Polly Matthew, neural engine).
+  async function speakOnline(text) {
+    if (!window.puter || !puter.ai || typeof puter.ai.txt2speech !== "function") {
+      throw ttsError("Puter.js did not load. Check the internet connection and reload the overlay.", "online-failed");
+    }
+    try {
+      const audio = await puter.ai.txt2speech(text, {
+        provider: "aws-polly",
+        voice: "Matthew",
+        engine: "neural",
+        language: "en-US"
+      });
+      if (!audio) throw new Error("No audio returned");
+      audio.volume = TTS_VOL;
+      await new Promise((resolve, reject) => {
+        let done = false;
+        const finish = error => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          audio.onended = audio.onerror = null;
+          error ? reject(error) : resolve();
+        };
+        const timer = setTimeout(() => finish(new Error("Voice playback timed out")), 40000);
+        audio.onended = () => finish();
+        audio.onerror = () => finish(new Error("Generated audio could not be played"));
+        const result = audio.play();
+        if (result && result.catch) result.catch(finish);
+      });
+    } catch (error) {
+      if (error && (error.name === "NotAllowedError" || error.code === "not-allowed")) {
+        throw ttsError("Audio is blocked until the page is clicked.", "not-allowed");
+      }
+      throw ttsError("Puter male voice failed: " + ((error && error.message) || "service unavailable"), "online-failed");
+    }
+  }
+
+  // Optional custom endpoint from the setup panel (advanced)
+  async function speakCustom(text, cfg) {
+    const headers = { "Content-Type": "application/json", "Accept": "audio/mpeg, audio/wav, audio/*, application/json" };
+    if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+    const ctl = new AbortController();
+    const abort = setTimeout(() => ctl.abort(), 12000);
+    let response;
+    try {
+      response = await fetch(cfg.ttsUrl, {
+        method: "POST", headers, mode: "cors", signal: ctl.signal,
+        body: JSON.stringify({ text, voice: cfg.voice, language: cfg.language || "en-US", lang: cfg.language || "en-US" })
+      });
+    } finally { clearTimeout(abort); }
+    if (!response.ok) throw new Error(`TTS service returned HTTP ${response.status}`);
+    const type = (response.headers.get("content-type") || "").toLowerCase();
+    let audioBlob;
+    if (type.includes("application/json")) {
+      const data = await response.json();
+      if (data.audioUrl || data.audio_url || data.url) {
+        const audioResponse = await fetch(data.audioUrl || data.audio_url || data.url);
+        if (!audioResponse.ok) throw new Error("Could not load audio from the TTS service.");
+        audioBlob = await audioResponse.blob();
+      } else if (data.audioBase64 || data.audio_base64) {
+        const raw = atob(data.audioBase64 || data.audio_base64);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        audioBlob = new Blob([bytes], { type: data.mimeType || data.mime_type || "audio/mpeg" });
+      } else {
+        throw new Error("TTS JSON must contain audioUrl or audioBase64.");
+      }
+    } else {
+      audioBlob = await response.blob();
+    }
+    const audioUrl = URL.createObjectURL(audioBlob);
+    try { await playAudioUrl(audioUrl); } finally { URL.revokeObjectURL(audioUrl); }
+  }
+
+  // All TTS, including tests, uses the Puter.js Matthew male voice.
   async function speakText(text, cfg = settings) {
     if (!text) return;
-    // No endpoint needed: use a browser voice with an explicitly selected English locale.
-    if (!cfg.ttsUrl) return speakWithBrowser(text, cfg);
-    try {
-      const headers = { "Content-Type": "application/json", "Accept": "audio/mpeg, audio/wav, audio/*, application/json" };
-      if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
-      const ctl = new AbortController();
-      const abort = setTimeout(() => ctl.abort(), 12000);
-      let response;
-      try {
-        response = await fetch(cfg.ttsUrl, {
-          method: "POST", headers, mode: "cors", signal: ctl.signal,
-          body: JSON.stringify({ text, voice: cfg.voice, language: cfg.language || "en-US", lang: cfg.language || "en-US" })
-        });
-      } finally { clearTimeout(abort); }
-      if (!response.ok) throw new Error(`TTS service returned HTTP ${response.status}`);
-      const type = (response.headers.get("content-type") || "").toLowerCase();
-      let audioBlob;
-      if (type.includes("application/json")) {
-        const data = await response.json();
-        if (data.audioUrl || data.audio_url || data.url) {
-          const audioResponse = await fetch(data.audioUrl || data.audio_url || data.url);
-          if (!audioResponse.ok) throw new Error("Could not load audio from the TTS service.");
-          audioBlob = await audioResponse.blob();
-        } else if (data.audioBase64 || data.audio_base64) {
-          const raw = atob(data.audioBase64 || data.audio_base64);
-          const bytes = new Uint8Array(raw.length);
-          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-          audioBlob = new Blob([bytes], { type: data.mimeType || data.mime_type || "audio/mpeg" });
-        } else {
-          throw new Error("TTS JSON must contain audioUrl or audioBase64.");
-        }
-      } else {
-        audioBlob = await response.blob();
-      }
-      const audioUrl = URL.createObjectURL(audioBlob);
-      try {
-        await new Promise((resolve, reject) => {
-          const audio = new Audio(audioUrl);
-          audio.volume = TTS_VOL;
-          const cap = setTimeout(() => { audio.pause(); resolve(); }, 30000);   // never hold the queue longer than 30s
-          audio.onended = () => { clearTimeout(cap); resolve(); };
-          audio.onerror = () => { clearTimeout(cap); reject(new Error("TTS audio could not be played.")); };
-          audio.play().catch(e => { clearTimeout(cap); reject(e); });
-        });
-      } finally {
-        URL.revokeObjectURL(audioUrl);
-      }
-    } catch (error) {
-      if (cfg.strict) throw error;                  // the setup test should show the real problem
-      console.warn("Third-party TTS failed; falling back to the browser English voice.", error);
-      await speakWithBrowser(text, cfg);
-    }
+    await speakOnline(text, cfg);
   }
 
   async function runTts() {
@@ -1265,7 +1430,8 @@
 
   function handleTts(tags, user, message) {
     if (!TTS_ON) return;
-    const text = cleanTts(stripEmotes(message, tags.emotes).replace(/^!tts\s*/i, ""));
+    const shown = cleanTts(stripEmotes(message, tags.emotes).replace(/^!tts\s*/i, ""));
+    const text = stripCustomEmotes(shown);                  // custom emote names are shown in chat but never read aloud
     if (!text) return;
 
     // English only: ignore messages written mostly in other scripts (not charged)
@@ -1293,7 +1459,7 @@
     const spk = document.createElement("span"); spk.className = "spk"; spk.appendChild(makeIcon("volume", "ui-icon"));
     const n = document.createElement("span"); n.className = "name"; n.textContent = name;
     n.style.color = readable(tags.color, name);
-    const t = document.createElement("span"); t.className = "text"; t.textContent = text;
+    const t = document.createElement("span"); t.className = "text"; t.appendChild(emotifyText(shown));
     el.append(spk, n, t);
     push(el, tags);
 
@@ -1304,10 +1470,10 @@
   /* ---------- Ting after a quiet minute ---------- */
   let lastMsgAt = Date.now();
   function ting() {
-    if (MUTE || !TING_ON) return;
+    if (MUTE || sfxMuted || !TING_ON) return;
     const c = audio(); if (!c || c.state !== "running") return;
     const t = c.currentTime + 0.01;
-    const master = c.createGain(); master.gain.value = 0.14; master.connect(c.destination);
+    const master = c.createGain(); master.gain.value = 0.14; master.connect(sfxOut(c));
     [[1760, 1], [2349.3, 0.35], [3520, 0.15]].forEach(([f, v]) => {
       const o = c.createOscillator(), g = c.createGain();
       o.type = "sine"; o.frequency.value = f;
@@ -1354,7 +1520,7 @@
     setTimeout(() => {
       clearInterval(tick);
       card.at.textContent = `${name} won ${win} ${CURRENCY_NAME}!`;
-      card.as.textContent = mod ? "" : `${net >= 0 ? "+" : ""}${net} after the 5 cookie spin`;
+      card.as.textContent = mod ? "" : `${net >= 0 ? "+" : ""}${net} after the ${WHEEL_COST} ${CURRENCY_NAME} spin`;
       if (!MUTE) chime(win >= 15 ? [880, 1108.7, 1318.5, 1760, 2217] : win >= 8 ? [783.99, 987.77, 1174.66] : [659.25, 783.99]);
     }, 2200);
   }
@@ -1428,7 +1594,7 @@
     queueAlert("cookie", `${nameOf(tags, user)} gifted ${n} ${CURRENCY_NAME} to ${m[1]}!`, "");
   }
 
-  // mods/broadcaster only, completely silent: !givecookies @name 20  (negative numbers take cookies away)
+  // mods/broadcaster only, completely silent: !give<currency> @name 20 (e.g. !givecookies)  (negative numbers take cookies away)
   function doGive(tags, arg) {
     if (!isMod(tags)) return;
     const m = arg.match(/^@?(\w{1,25})\s+(-?\d{1,6})$/);
@@ -1438,7 +1604,7 @@
   }
 
   function handleCommand(tags, user, message) {
-    const cm = message.match(/^!([a-z]+)(?:\s+(.*))?$/i);
+    const cm = message.match(/^!([a-z0-9]+)(?:\s+(.*))?$/i);
     if (!cm) return false;
     const cmd = cm[1].toLowerCase(), arg = (cm[2] || "").trim();
     switch (cmd) {
@@ -1446,10 +1612,13 @@
       case "hydrate":     doHydrate(tags, user); return true;
       case "request":     doRequest(tags, user, arg); return true;
       case "gift":        doGift(tags, user, arg); return true;
-      case "givecookies": doGive(tags, arg); return true;
+      case "mutesfx":     doMuteSfx(tags, user, true); return true;
+      case "unmutesfx":   doMuteSfx(tags, user, false); return true;
       case "requests":    showRequests(tags); return true;
       case "donerequest": doneRequest(tags); return true;
     }
+    if (CUR_CMDS.some(c => cmd === "give" + c)) { doGive(tags, arg); return true; }    // !give<currency> @name 20
+    if (SFX_NAMES.has(cmd)) { doSfxCmd(tags, user, cmd); return true; }              // !meow, !gunshot, ...
     return false;
   }
 
@@ -1474,6 +1643,8 @@
       "Hydrate":  () => { rewardCd.clear(); doHydrate(modTags, "demo"); },
       "Request":  () => { rewardCd.clear(); doRequest(modTags, "demo", "Bloodbath by Riot"); },
       "Gift":     () => { rewardCd.clear(); doGift(modTags, "demo", "@SampleViewer 5"); },
+      "!meow":    () => { sfxGlobalLast = 0; doSfxCmd(modTags, "demo", "meow"); },
+      "Mute sfx": () => doMuteSfx(modTags, "demo", !sfxMuted),
       "Ting":     () => ting()
     };
     Object.entries(items).forEach(([k, f]) => {
@@ -1506,6 +1677,32 @@
     return out;
   }
 
+  // Custom emotes: the word (any capitalization) is replaced by the image next to this file.
+  const CUSTOM_EMOTES = { ww: "ww.png", ll: "ll.png", normalface: "normalface.png", son: "son.png" };
+  const EMOTE_WORD = /^([^\p{L}\p{N}]*)([\p{L}\p{N}_]+)([^\p{L}\p{N}]*)$/u;
+  const customEmoteOf = (word) => { const m = word.match(EMOTE_WORD); return m && CUSTOM_EMOTES[m[2].toLowerCase()] ? { m, file: CUSTOM_EMOTES[m[2].toLowerCase()] } : null; };
+  function emotifyText(str) {
+    const frag = document.createDocumentFragment();
+    let buf = "";
+    const flush = () => { if (buf) { frag.appendChild(document.createTextNode(buf)); buf = ""; } };
+    for (const part of String(str).split(/(\s+)/)) {
+      const hit = customEmoteOf(part);
+      if (!hit) { buf += part; continue; }
+      buf += hit.m[1]; flush();
+      const img = document.createElement("img");
+      img.className = "emote custom-emote";
+      img.src = hit.file; img.alt = hit.m[2]; img.title = hit.m[2];
+      img.onerror = () => img.replaceWith(document.createTextNode(hit.m[2]));   // image missing: show the plain word
+      frag.appendChild(img);
+      buf = hit.m[3];
+    }
+    flush();
+    return frag;
+  }
+  function stripCustomEmotes(str) {
+    return String(str).split(/(\s+)/).map(part => customEmoteOf(part) ? "" : part).join("").replace(/\s+/g, " ").trim();
+  }
+
   function buildText(message, emoteTag) {
     const frag = document.createDocumentFragment();
     const chars = Array.from(message);
@@ -1521,7 +1718,7 @@
       ranges.sort((a, b) => a.s - b.s);
     }
     let cur = 0;
-    const text = (a, b) => { if (b > a) frag.appendChild(document.createTextNode(chars.slice(a, b).join(""))); };
+    const text = (a, b) => { if (b > a) frag.appendChild(emotifyText(chars.slice(a, b).join(""))); };
     for (const r of ranges) {
       text(cur, r.s);
       const img = document.createElement("img");
@@ -1548,8 +1745,8 @@
     }
   }
 
-  // !cheer 100 or !cheercookies 100
-  const CHEER_RE = /^\s*(?:!cheercookies|!cheer)\s+(\d{1,3}(?:,\d{3})+|\d{1,9})\s*$/i;
+  // !cheer 100 or !cheer<currency> 100 (e.g. !cheercookies 100)
+  const CHEER_RE = new RegExp("^\\s*(?:" + [...CUR_CMDS.map(c => "!cheer" + c), "!cheer"].join("|") + ")\\s+(\\d{1,3}(?:,\\d{3})+|\\d{1,9})\\s*$", "i");
   const activeChatters = new Map();
 
   function addCheer(tags, user, amount) {
@@ -1594,7 +1791,7 @@
       const c = message.match(CHEER_RE);
       if (c) { tryCheer(tags, user, c[1]); return; }
       if (/^!tts(\s|$)/i.test(message)) { handleTts(tags, user, message); return; }
-      if (/^!cookies?\s*$/i.test(message)) { showBalance(tags, user); return; }
+      { const bm = message.match(/^!([a-z0-9]+)\s*$/i); if (bm && CUR_CMDS.includes(bm[1].toLowerCase())) { showBalance(tags, user); return; } }
       if (handleCommand(tags, user, message)) return;
     }
 
@@ -1660,7 +1857,7 @@
         if (un) { handleUserNotice(tags, un[1] || ""); return; }
 
         const parts = rest.match(/^:([^!]+)![^ ]+ PRIVMSG #[^ ]+ :(.*)$/);
-        if (parts) { addMessage(tags, parts[1], parts[2]); return; }
+        if (parts) { loadChannelBadges(tags["room-id"]); addMessage(tags, parts[1], parts[2]); return; }
 
         if (/ JOIN #/.test(rest) && rest.startsWith(":justinfan")) { retry = 0; setStatus(""); return; }
 

@@ -1288,6 +1288,7 @@
       const audio = new Audio();
       audio.preload = "auto";
       audio.volume = TTS_VOL;
+      audio.playbackRate = 1.5;
       let done = false, startTimer, capTimer;
       const finish = err => {
         if (done) return;
@@ -1312,7 +1313,7 @@
 
   // Hosted no-signup TTS proxy. No Puter, no Google Translate direct endpoint, no system-voice fallback.
   async function speakOnline(text, cfg = settings) {
-    const url = "https://tts-api.netlify.app/?text=" + encodeURIComponent(text) + "&lang=en&pitch=0.8&speed=1";
+    const url = "https://tts-api.netlify.app/?text=" + encodeURIComponent(text) + "&lang=en&pitch=0.8&speed=1.5";
     await playAudioUrl(url);
   }
 
@@ -1646,7 +1647,7 @@
   }
 
   // Custom emotes: the word (any capitalization) is replaced by the image next to this file.
-  const CUSTOM_EMOTES = { ww: "ww.png", ll: "ll.png", normalface: "normalface.png", son: "son.png" };
+  const CUSTOM_EMOTES = { ww: "ww.png", ll: "ll.png", normalface: "normalface.png", son: "son.png", hi: "hi.gif" };
   const EMOTE_WORD = /^([^\p{L}\p{N}]*)([\p{L}\p{N}_]+)([^\p{L}\p{N}]*)$/u;
   const customEmoteOf = (word) => { const m = word.match(EMOTE_WORD); return m && CUSTOM_EMOTES[m[2].toLowerCase()] ? { m, file: CUSTOM_EMOTES[m[2].toLowerCase()] } : null; };
   function emotifyText(str) {

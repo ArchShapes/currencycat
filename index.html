@@ -313,7 +313,7 @@
         <div class="setup-checks" style="margin-bottom:12px">
           <label class="setup-check"><input id="cfg-tts-enabled" type="checkbox" checked> Enable <code>!tts</code></label>
         </div>
-        <p class="hint">Voice: Brian (English) via StreamElements. No signup required.</p>
+        <p class="hint">Voice: Google Translate English TTS. No signup required.</p>
         <div class="setup-tts-test">
           <button id="global-tts-test" type="button">Test TTS</button>
           <span id="global-setup-tts-status" aria-live="polite"></span>
@@ -1310,10 +1310,9 @@
     });
   }
 
-  // StreamElements hosted TTS: no account, API key, or local system voice required.
-  // Brian is an English voice provided by the StreamElements speech endpoint.
+  // Hosted no-signup TTS proxy. No Puter, no Google Translate direct endpoint, no system-voice fallback.
   async function speakOnline(text, cfg = settings) {
-    const url = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
+    const url = "https://tts-api.netlify.app/?text=" + encodeURIComponent(text) + "&lang=en&pitch=0.8&speed=1";
     await playAudioUrl(url);
   }
 

@@ -1385,10 +1385,16 @@
     try { await playAudioUrl(audioUrl); } finally { URL.revokeObjectURL(audioUrl); }
   }
 
-  // All TTS, including tests, uses the Puter.js Matthew male voice.
+  // Prefer Puter.js Matthew. If OBS cannot complete Puter authorization, use
+  // the available English male system voice so TTS still works without a popup.
   async function speakText(text, cfg = settings) {
     if (!text) return;
-    await speakOnline(text, cfg);
+    try {
+      await speakOnline(text, cfg);
+    } catch (error) {
+      if (error && (error.code === "not-allowed" || error.name === "NotAllowedError")) throw error;
+      await speakWithBrowser(text, cfg);
+    }
   }
 
   async function runTts() {

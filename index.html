@@ -29,7 +29,7 @@
      &leadmod=name1,name2  show a LeadMod badge for these logins
      &silent=name1,name2   show a Silent badge for these logins
      &demo=1         show test buttons
-     Commands:  !<currency> (e.g. !cookies)  !cheer <n>  !tts <text>  !<sfxname> (e.g. !meow)
+     Commands:  !<currency> (e.g. !cookies)  !cheer <n>  !tts <text>  !knocking  or (knocking) inside !tts
                 !mutesfx / !unmutesfx  (streamer + lead mods only; lead mods are set in the setup panel or with &leadmod=)  */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body.bg { background: #0e0e10; }
@@ -280,7 +280,7 @@
         <h3>Twitch</h3>
         <div class="setup-grid">
           <label>Channel
-            <input id="cfg-channel" autocomplete="off" placeholder="yourchannel">
+            <input id="cfg-channel" value="bogdanthegdplayer" readonly aria-readonly="true">
           </label>
           <label><span>Overlay display name <span class="opt">(optional)</span></span>
             <input id="cfg-account" autocomplete="off" placeholder="My Stream">
@@ -365,11 +365,12 @@
 
   const SETTINGS_KEY = "global-overlay-settings-v1";
   const defaultSettings = {
-    channel: "", twitchClientId: "", twitchToken: "", account: "", currency: "Cookies", symbol: "cookie", ttsUrl: "", voice: "", apiKey: "", browserVoice: "", ttsEngine: "online", onlineVoice: "Brian", leadMods: "",
+    channel: "bogdanthegdplayer", twitchClientId: "", twitchToken: "", account: "", currency: "Cookies", symbol: "cookie", ttsUrl: "", voice: "", apiKey: "", browserVoice: "", ttsEngine: "online", onlineVoice: "Brian", leadMods: "",
     language: "en-US", tts: true, alerts: true, chat: true, configured: false
   };
   let settings = { ...defaultSettings };
   try { settings = { ...defaultSettings, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch (e) {}
+  settings.channel = "bogdanthegdplayer";
   if (!["cookie", "money", "box", "moon", "fries", "heart"].includes(settings.symbol)) settings.symbol = "cookie";
   const setupBackdrop = document.getElementById("global-setup-backdrop");
   const setupStatus = document.getElementById("global-setup-status");
@@ -453,7 +454,7 @@
   }
   document.getElementById("global-setup-save").addEventListener("click", () => {
     for (const [key, id] of Object.entries(setupFields)) settings[key] = document.getElementById(id).value.trim();
-    settings.channel = settings.channel.replace(/^#/, "").toLowerCase();
+    settings.channel = "bogdanthegdplayer";
     settings.currency = settings.currency || "Cookies";
     settings.symbol = settings.symbol || "";
     settings.tts = document.getElementById("cfg-tts-enabled").checked;
@@ -472,7 +473,7 @@
     if (settings.configured) { leaveSetupRoute(); closeSetup(); }
     else setSetupStatus("Enter your channel and save to start the overlay.");
   });
-  const CHANNEL = (settings.channel || params.get("channel") || "").toLowerCase().replace(/^#/, "");
+  const CHANNEL = "bogdanthegdplayer";
   const CURRENCY_NAME = settings.currency || "Cookies";
   const CUR_CMDS = currencyCmds(CURRENCY_NAME);          // e.g. ["cookies", "cookie"]
   const DISPLAY_ACCOUNT = settings.account || CHANNEL;
@@ -1015,7 +1016,7 @@
   }
 
   /* ---------- SFX (used inside TTS) ---------- */
-  const SFX_NAMES = new Set(["meow", "gunshot", "vineboom", "airhorns", ...EXTRA_SFX]);
+  const SFX_NAMES = new Set(["meow", "gunshot", "vineboom", "airhorns", "knocking", ...EXTRA_SFX]);
   const SFX_MAX = 3;
 
   function noiseBuf(c, secs) {
@@ -1072,6 +1073,24 @@
       g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
       o.connect(sh); sh.connect(g); g.connect(out); o.start(t); o.stop(t + 1.5);
       return 1.4;
+    },
+    knocking(c, out, t) {
+      // Three quick, hollow knocks on a wooden door.
+      [0, 0.22, 0.44].forEach((off, i) => {
+        const n = c.createBufferSource();
+        n.buffer = noiseBuf(c, 0.11);
+        const f = c.createBiquadFilter();
+        f.type = "bandpass";
+        f.frequency.value = 520 + (i % 2) * 90;
+        f.Q.value = 1.1;
+        const g = c.createGain();
+        g.gain.setValueAtTime(0.0001, t + off);
+        g.gain.exponentialRampToValueAtTime(0.85, t + off + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.105);
+        n.connect(f); f.connect(g); g.connect(out);
+        n.start(t + off); n.stop(t + off + 0.11);
+      });
+      return 0.62;
     },
     airhorns(c, out, t) {
       [0, 0.75].forEach(off => {
@@ -1605,7 +1624,7 @@
       "Mass gift":() => queueAlert("gift", "SampleViewer is gifting 5 subs!", "Tier 1"),
       "Bits":     () => queueAlert("bits", "SampleViewer cheered 100 bits!"),
       "Cheer cookies":() => addCheer({ "display-name": "SampleViewer" }, "sampleviewer", 50),
-      "TTS+sfx":  () => handleTts(modTags, "demo", "!tts Hello there (meow) this is a test (vineboom) (gunshot) (airhorns)"),
+      "TTS+sfx":  () => handleTts(modTags, "demo", "!tts Hello there (knocking) this is a test (meow) (vineboom)"),
       "Cookies":  () => { noteLast.clear(); addCookieCard({ "display-name": "SampleViewer" }, "sampleviewer", false); },
       "Short":    () => { noteLast.clear(); addCookieCard({ "display-name": "SampleViewer" }, "sampleviewer", true); },
       "Wheel":    () => { rewardCd.clear(); doWheel(modTags, "demo"); },
@@ -1613,6 +1632,7 @@
       "Request":  () => { rewardCd.clear(); doRequest(modTags, "demo", "Bloodbath by Riot"); },
       "Gift":     () => { rewardCd.clear(); doGift(modTags, "demo", "@SampleViewer 5"); },
       "!meow":    () => { sfxGlobalLast = 0; doSfxCmd(modTags, "demo", "meow"); },
+      "!knocking":() => { sfxGlobalLast = 0; doSfxCmd(modTags, "demo", "knocking"); },
       "Mute sfx": () => doMuteSfx(modTags, "demo", !sfxMuted),
       "Ting":     () => ting()
     };
@@ -1647,7 +1667,7 @@
   }
 
   // Custom emotes: the word (any capitalization) is replaced by the image next to this file.
-  const CUSTOM_EMOTES = { ww: "ww.png", ll: "ll.png", normalface: "normalface.gif", son: "son.png", hi: "hi.gif", bogdanpfp: "bogdanpfp.png"};
+  const CUSTOM_EMOTES = { ww: "ww.png", ll: "ll.png", normalface: "normalface.png", son: "son.png", hi: "hi.gif" };
   const EMOTE_WORD = /^([^\p{L}\p{N}]*)([\p{L}\p{N}_]+)([^\p{L}\p{N}]*)$/u;
   const customEmoteOf = (word) => { const m = word.match(EMOTE_WORD); return m && CUSTOM_EMOTES[m[2].toLowerCase()] ? { m, file: CUSTOM_EMOTES[m[2].toLowerCase()] } : null; };
   function emotifyText(str) {

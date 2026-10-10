@@ -344,7 +344,6 @@
   </section>
 </div>
 
-<script src="https://js.puter.com/v2/"></script>
 <script>
 (() => {
   const params = new URLSearchParams(location.search);
@@ -418,7 +417,7 @@
   document.getElementById("global-tts-test").addEventListener("click", async () => {
     const button = document.getElementById("global-tts-test");
     const val = id => document.getElementById(id).value.trim();
-    const cfg = { ...settings, strict: true, ttsUrl: "", ttsEngine: "online", onlineVoice: "Matthew" };
+    const cfg = { ...settings, strict: true, ttsUrl: "", ttsEngine: "online", onlineVoice: "Brian" };
     const run = ++ttsTestRun;
     const say = (msg, kind = "") => { if (run === ttsTestRun) { ttsStatus.textContent = msg; ttsStatus.className = kind; } };
     button.disabled = true;
@@ -1311,41 +1310,11 @@
     });
   }
 
-  // Male English voice through Puter.js (AWS Polly Matthew, neural engine).
-  async function speakOnline(text) {
-    if (!window.puter || !puter.ai || typeof puter.ai.txt2speech !== "function") {
-      throw ttsError("Puter.js did not load. Check the internet connection and reload the overlay.", "online-failed");
-    }
-    try {
-      const audio = await puter.ai.txt2speech(text, {
-        provider: "aws-polly",
-        voice: "Matthew",
-        engine: "neural",
-        language: "en-US"
-      });
-      if (!audio) throw new Error("No audio returned");
-      audio.volume = TTS_VOL;
-      await new Promise((resolve, reject) => {
-        let done = false;
-        const finish = error => {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          audio.onended = audio.onerror = null;
-          error ? reject(error) : resolve();
-        };
-        const timer = setTimeout(() => finish(new Error("Voice playback timed out")), 40000);
-        audio.onended = () => finish();
-        audio.onerror = () => finish(new Error("Generated audio could not be played"));
-        const result = audio.play();
-        if (result && result.catch) result.catch(finish);
-      });
-    } catch (error) {
-      if (error && (error.name === "NotAllowedError" || error.code === "not-allowed")) {
-        throw ttsError("Audio is blocked until the page is clicked.", "not-allowed");
-      }
-      throw ttsError("Puter male voice failed: " + ((error && error.message) || "service unavailable"), "online-failed");
-    }
+  // StreamElements hosted TTS: no account, API key, or local system voice required.
+  // Brian is an English voice provided by the StreamElements speech endpoint.
+  async function speakOnline(text, cfg = settings) {
+    const url = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
+    await playAudioUrl(url);
   }
 
   // Optional custom endpoint from the setup panel (advanced)
@@ -1385,16 +1354,10 @@
     try { await playAudioUrl(audioUrl); } finally { URL.revokeObjectURL(audioUrl); }
   }
 
-  // Prefer Puter.js Matthew. If OBS cannot complete Puter authorization, use
-  // the available English male system voice so TTS still works without a popup.
+  // Use the browser voice engine; prefer an English male voice when available.
   async function speakText(text, cfg = settings) {
     if (!text) return;
-    try {
-      await speakOnline(text, cfg);
-    } catch (error) {
-      if (error && (error.code === "not-allowed" || error.name === "NotAllowedError")) throw error;
-      await speakWithBrowser(text, cfg);
-    }
+    await speakOnline(text, cfg);
   }
 
   async function runTts() {

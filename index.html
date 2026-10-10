@@ -1647,7 +1647,7 @@
   }
 
   // Custom emotes: the word (any capitalization) is replaced by the image next to this file.
-  const CUSTOM_EMOTES = { ww: "ww.png", ll: "ll.png", normalface: "normalface.png", son: "son.png", hi: "hi.gif" };
+  const CUSTOM_EMOTES = { ww: "ww.png", ll: "ll.png", normalface: "normalface.gif", son: "son.png", hi: "hi.gif", bogdanpfp: "bogdanpfp.png"};
   const EMOTE_WORD = /^([^\p{L}\p{N}]*)([\p{L}\p{N}_]+)([^\p{L}\p{N}]*)$/u;
   const customEmoteOf = (word) => { const m = word.match(EMOTE_WORD); return m && CUSTOM_EMOTES[m[2].toLowerCase()] ? { m, file: CUSTOM_EMOTES[m[2].toLowerCase()] } : null; };
   function emotifyText(str) {
